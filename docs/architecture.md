@@ -127,6 +127,6 @@ Agreed 10 October 2026 for the first build stage; revisit only if a later stage 
 | Mobile app | Expo (React Native) with TypeScript | One codebase for iPhone and Android; test on phones without app-store builds. |
 | Backend | Supabase: Postgres, Auth, Realtime, Edge Functions | One hosted backend; database rules enforce permissions; Realtime pushes state changes. |
 | Game commands | Postgres functions (RPC) or Edge Functions | Keeps validation and state changes on the backend, per section 3. |
-| Maps | Deferred to the Field Library stage | Not needed for Stage 1. |
+| Maps | Built-in maps via `react-native-maps` (Apple Maps on iPhone, Google Maps on Android), chosen 11 October 2026 | Works in Expo Go with satellite view and no account for testing; Android release builds need a free Google Maps key. Revisit MapLibre/Mapbox if offline maps become essential. |
 
 Clients read through Row Level Security and change gameplay state only through backend functions, never by writing tables directly.

@@ -1,77 +1,45 @@
 # Current plan
 
-Status: Stage 1 implemented, 10 October 2026; awaiting Supabase setup and phone testing. Setup steps: [development setup](../docs/development-setup.md). The completed walkthrough prototype plan is archived in [walkthrough-prototype-2026-10-06.md](walkthrough-prototype-2026-10-06.md).
+Status: Stage 2 planned, 11 October 2026; not started. Stage 1 is archived in [stage1-2026-10-11.md](stage1-2026-10-11.md).
 
-## Stage 1 — Sign-in, Game Days and lobby
+## Stage 2 — Field Library and map
 
 ### Outcome
 
-A real app running on iPhone and Android. A host creates a Game Day; players find it in the public list, join, choose role/team/section and wait in the lobby. A playing admin switches into Admin Mode to manage teams and players. No games are played yet.
+An organiser saves a field once (boundary, No-go and Danger areas, labelled points) and picks it when hosting a Game Day. Everyone in the day sees that field on the Map tab with their own position. No games are played yet.
 
-### Stack
+### Map choice
 
-Expo (React Native, TypeScript) + Supabase. See [architecture](../docs/architecture.md#9-technology-stack).
+Built-in maps through `react-native-maps` (Apple Maps on iPhone, Google Maps on Android), chosen 11 October 2026. Works in Expo Go, has satellite view, needs no account for testing. A free Google Maps key is needed for Android release builds. Revisit MapLibre/Mapbox only if offline maps become essential. The web version shows a simple placeholder instead of a map.
 
 ### Scope
 
-1. **Project setup:** Expo app, Supabase project, database migrations in the repo, environment config, lint/type checks and a test runner.
-2. **Sign-in and profile:** email + password with Supabase "Confirm email" off for testing (default email templates can't carry a code without custom SMTP); add Sign in with Apple/Google and email confirmation before store release. Profile has a callsign; photo deferred.
-3. **Home:** Join Game Day, Create Game Day, my recent Game Days. Reopening the app restores the session and routes to the current Game Day.
-4. **Create Game Day:** name only; creator becomes admin; two renameable teams (Blue/Red) are created.
-5. **Public list and joining:** all open days, each showing name, host, player count. Location permission is required to join ([app flow §3](../docs/app-flow.md#3-joining-and-day-setup)). Removed players cannot rejoin until readmitted.
-6. **Day setup:** role first, then team (required), then section (optional; create & join or Unassigned). Team limits deferred.
-7. **Lobby and navigation:** Game · Map · Scan · Team · More. Game shows lobby state; Map and Scan are placeholders; Team shows assignment and members; More has callsign, Leave day and the Admin Mode toggle.
-8. **Admin Mode:** rename teams, see players and incomplete setups, correct assignments, grant/revoke admin, remove/readmit players, close the day. Always keep at least one admin (checked in the database, safe under concurrent requests).
-9. **Live updates:** lobby, team lists and membership update without refresh (Supabase Realtime).
+Follows the first useful slice in [Field Library](../docs/field-library.md#first-useful-scope-and-checks).
+
+1. **Field Library** (Home → Fields): list my saved fields; Create, Open/Edit, Duplicate, Archive. Only the creator edits a saved field.
+2. **Field editor:** name, optional location and notes; find the field on a satellite map and set the starting view; draw the playable boundary by tapping corners (Finish/Cancel/Undo); add No-go and Danger areas with a name and instruction; place labelled points (staging, respawn, base, marshal point, other). Review, then Save Field.
+3. **Validation before Save:** name, a closed boundary of at least 3 corners that doesn't cross itself, and valid areas/points. Only valid fields are saved; cancelling keeps the last saved version.
+4. **Pick a field for the day:** Host tab shows **Field not selected** → Choose field → review → confirm. Confirming copies the field into the day (a snapshot); later template edits don't change the day.
+5. **Map tab:** satellite map of the day's field with boundary, No-go (labelled, hatched), Danger (labelled) and points; your own position as the usual blue dot; Recentre and Fit field buttons. Before a field is picked it says so.
+6. **Database:** fields and field revisions owned by their creator; a day field copy; all changes through backend functions; tests for ownership, validation and snapshot copying.
+
+### Defaults chosen for this stage
+
+- Areas may extend past the boundary; holes inside areas are not supported yet.
+- All points are visible to everyone in the day. Team-only start points wait until team mapping is designed.
+- Your own position is shown on your phone only; sharing positions with your team is Stage 3 (tracking).
+- Editing the day's copy of a field is allowed while the day is in setup; pause/live rules come with games in Stage 3.
+- No automatic boundary warnings, NFC binding, imports or sharing fields with other hosts.
 
 ### Exclusions
 
-Field Library and maps, games and lifecycle, location tracking/upload (only the permission check), NFC, medic, scoring, offline play, push notifications, Apple/Google sign-in, app-store release.
-
-### Defaults to confirm during the stage
-
-- Email + password sign-in for Stage 1 (changed from email codes, 11 October 2026).
-- Foreground location permission is enough to join; background permission is asked in Stage 3.
-- Closed days disappear from the list; members still see them under recent days.
+Games and lifecycle, sharing positions, team-only icons, tactical drawings and markers, NFC point registration, offline maps, the Daylight scheme.
 
 ### Acceptance checks
 
-- [ ] Runs on one iPhone and one Android phone via Expo.
-- [ ] Sign in, set callsign, sign out, reopen into the current day.
-- [ ] Host creates a day; it appears in another user's list within a few seconds.
-- [ ] Join is blocked without location permission, with an Allow/Open settings action.
-- [ ] Role → team → section setup; lobby shows the assignment; team counts update live.
-- [ ] Admin Mode toggle appears only for admins; non-admins cannot perform admin actions even by calling the backend directly.
-- [ ] Last admin cannot leave, be demoted or be removed.
-- [ ] Removed player cannot rejoin from the list until readmitted.
-- [ ] Closed day leaves the public list.
-- [x] Tests cover permission rules, last-admin protection and join/remove/readmit.
-
-Do not begin Stage 2 automatically.
-
-## Redesign impact (11 October 2026)
-
-The [design direction](../docs/design-direction.md) changed some Stage 1 screens. Applied to `mobile/` on 11 October 2026 (type check and lint pass; not yet tried on a phone):
-
-- Home: open Game Days list first with Join/Open, Host a game day below, History of closed days. The separate Join screen remains but Home no longer needs it.
-- Day setup: one Check in screen (team cards, role chips, optional section with + New).
-- Navigation: Game · Map · Scan · Squad · More; admins see **Host** instead of More. The Admin Mode toggle is gone: admins always get team rename and player management in Squad, and day status, leave and End Game Day in Host.
-- Lobby: assignment chip, Next up card, your section's members.
-- Look: Ranger green tokens with orange for danger and Yellow/Purple team colours; olive primary buttons; bold uppercase headings.
-
-Testing feedback (11 October 2026), applied:
-
-- Fonts: Barlow Condensed (headings) and IBM Plex Sans (text) are bundled in `mobile/assets/fonts` and loaded with `expo-font`.
-- Section leads: each section has at most one lead (`sections.leader_id`, migration `0002_section_leads.sql`). Creating a section makes you its lead; the lead or an admin can hand it to someone in the section; a section with no lead can be taken by any member; leaving the section gives it up. "Section Leader" is no longer a role choice.
-- Check in: "+ Start a new section" is a link that opens the form, since most players join an existing section.
-- Squad: your team is open with your section first and other sections folded; other teams are listed folded below. Admins tap a player to change assignment, section lead or admin access.
-
-Still to do: the Daylight scheme, and the Home "Your kit" row once Fields and Medic rules exist. Acceptance checks that mention the Admin Mode toggle or role → team → section order now mean the Host tab and the one-screen check in.
-
-## Progress
-
-- Database: `supabase/migrations/0001_stage1.sql`. Tables are read-only to clients (RLS); all changes go through backend functions. 12 database tests pass (`supabase/tests`, in-memory Postgres): permissions, direct-write denial, last admin, join/leave/remove/readmit, section/team validation, closed days.
-- App: `mobile/` (Expo SDK 57, Expo Router). Typecheck and lint pass; Android and web bundles build. Web smoke test with a mocked backend covered sign-in, Home, join list, role/team/section setup, lobby tabs, Admin Mode, member sheet and the last-admin error, with no phone-width overflow.
-- Supabase migration applied 11 October 2026 (API confirms functions exist and signed-out access is refused).
-- Not yet verified: email codes, realtime updates, location prompt and both phones. Remaining unchecked acceptance items need that testing.
-- Host-only admins: an admin can skip role/team with **Host only — not playing**; remembered only until the app restarts.
+- [ ] Create, save, reopen, edit, duplicate and archive a field without losing its shapes or labels.
+- [ ] Saving is refused for an unfinished or self-crossing boundary; cancelling an edit keeps the last saved version.
+- [ ] A new day shows Field not selected; an admin picks and confirms a field; players see it on the Map tab within a few seconds.
+- [ ] Editing the saved field afterwards doesn't change the day's copy.
+- [ ] Non-creators can't edit a saved field, and non-admins can't change the day's field, even by calling the backend directly.
+- [ ] The Map tab shows your own position and works on iPhone and Android in Expo Go.
