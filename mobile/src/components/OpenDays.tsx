@@ -75,7 +75,7 @@ export function OpenDays({ days, error: loadError }: { days: OpenDay[] | null; e
         </Card>
       )}
       <ErrorText>{error || loadError}</ErrorText>
-      {days?.length === 0 && <Body muted>No open Game Days right now. Host one below.</Body>}
+      {days?.length === 0 && <Body muted>No Game Days are open right now. When your host opens one, it shows up here.</Body>}
       {days?.map((d, i) => {
         const removed = d.my_status === 'removed';
         const joined = d.my_status === 'active';
