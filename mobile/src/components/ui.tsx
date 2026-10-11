@@ -1,8 +1,10 @@
-import { useState, type ReactNode } from 'react';
+import { createContext, useContext, useRef, useState, type ReactNode, type RefObject } from 'react';
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   ScrollView,
+  type ScrollViewProps,
   StyleSheet,
   Text,
   TextInput,
@@ -12,6 +14,19 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colours, display, radius, space, fonts } from '../theme';
+
+// Lets a Field scroll itself to the top of the surrounding scroll view when
+// focused, so the keyboard never hides what you're typing.
+const ScrollContext = createContext<RefObject<ScrollView | null> | null>(null);
+
+export function FocusScrollView(props: ScrollViewProps) {
+  const ref = useRef<ScrollView>(null);
+  return (
+    <ScrollContext.Provider value={ref}>
+      <ScrollView ref={ref} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets {...props} />
+    </ScrollContext.Provider>
+  );
+}
 
 export function Screen({
   children,
@@ -25,9 +40,7 @@ export function Screen({
   return (
     <SafeAreaView style={styles.screen} edges={edges}>
       {scroll ? (
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          {children}
-        </ScrollView>
+        <FocusScrollView contentContainerStyle={styles.content}>{children}</FocusScrollView>
       ) : (
         <View style={[styles.content, { flex: 1 }]}>{children}</View>
       )}
@@ -134,10 +147,28 @@ export function ConfirmButton({
 }
 
 export function Field(props: TextInputProps) {
+  const scroll = useContext(ScrollContext);
+  const input = useRef<TextInput>(null);
   return (
     <TextInput
+      ref={input}
       placeholderTextColor={colours.textSecondary}
       {...props}
+      onFocus={(e) => {
+        props.onFocus?.(e);
+        const view = scroll?.current;
+        if (!view || Platform.OS === 'web') return;
+        // Wait for the keyboard to open, then bring this field to the top.
+        setTimeout(() => {
+          const inner = view.getInnerViewNode();
+          if (!inner || !input.current) return;
+          input.current.measureLayout(
+            inner,
+            (_x, y) => view.scrollTo({ y: Math.max(0, y - space.md), animated: true }),
+            () => {},
+          );
+        }, 300);
+      }}
       style={[styles.field, props.style]}
     />
   );

@@ -4,10 +4,10 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Location from 'expo-location';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FieldMap, type FieldMapHandle } from '../../components/FieldMap';
-import { Body, Button, Card, Chip, ErrorText, Field, Label, Loading, Row } from '../../components/ui';
+import { Body, Button, Card, Chip, ErrorText, Field, FocusScrollView, Label, Loading, Row } from '../../components/ui';
 import { api, friendlyError } from '../../lib/api';
 import {
   AREA_LABELS,
@@ -221,7 +221,7 @@ export default function FieldEditor() {
         {tool && <Text style={styles.hint}>{HINTS[tool]}</Text>}
       </View>
 
-      <ScrollView style={styles.panel} contentContainerStyle={styles.panelContent} keyboardShouldPersistTaps="handled">
+      <FocusScrollView style={styles.panel} contentContainerStyle={styles.panelContent}>
         {drawing ? (
           <>
             <Body>
@@ -335,7 +335,7 @@ export default function FieldEditor() {
             <Button title="Cancel" variant="secondary" onPress={() => router.back()} />
           </>
         )}
-      </ScrollView>
+      </FocusScrollView>
     </SafeAreaView>
   );
 }
