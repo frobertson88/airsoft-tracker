@@ -21,8 +21,20 @@ export interface FieldMapHandle {
   fit: () => void;
 }
 
+/** A player shown on the map (teammates, or everyone for a host). */
+export interface MapPlayer {
+  id: string;
+  lat: number;
+  lng: number;
+  label: string;
+  colour: string;
+  /** Set when the position is old: greyed and labelled with its age. */
+  stale?: string;
+}
+
 export interface FieldMapProps {
   data: FieldData;
+  players?: MapPlayer[];
   /** A shape being drawn in the editor. */
   draft?: { kind: 'boundary' | AreaKind; points: Coord[] } | null;
   onPress?: (c: Coord) => void;
@@ -51,7 +63,7 @@ const DRAFT_STROKE: Record<'boundary' | AreaKind, string> = {
 };
 
 export const FieldMap = forwardRef<FieldMapHandle, FieldMapProps>(function FieldMap(
-  { data, draft, onPress, onViewChange, showsUserLocation, style },
+  { data, players, draft, onPress, onViewChange, showsUserLocation, style },
   ref,
 ) {
   const map = useRef<MapView>(null);
@@ -133,6 +145,25 @@ export const FieldMap = forwardRef<FieldMapHandle, FieldMapProps>(function Field
         );
       })}
 
+      {players?.map((p) => (
+        <Marker
+          // The key changes with the look so Android redraws the marker.
+          key={`player-${p.id}-${p.colour}-${p.stale ?? ''}`}
+          coordinate={toLatLng(p)}
+          anchor={{ x: 0.5, y: 0.5 }}
+          tracksViewChanges={false}
+          zIndex={10}
+        >
+          <View style={[styles.player, p.stale ? styles.playerStale : null]}>
+            <View style={[styles.playerDot, { backgroundColor: p.stale ? colours.textSecondary : p.colour }]} />
+            <Text style={styles.playerLabel} numberOfLines={1}>
+              {p.label}
+              {p.stale ? ` · ${p.stale}` : ''}
+            </Text>
+          </View>
+        </Marker>
+      ))}
+
       {draft && draft.points.length > 0 && (
         <>
           <Polyline
@@ -182,6 +213,18 @@ const styles = StyleSheet.create({
     fontFamily: fonts.semibold,
     fontSize: 12,
     backgroundColor: 'rgba(11,16,12,0.75)',
+    paddingHorizontal: 4,
+    borderRadius: 4,
+    marginTop: 2,
+  },
+  player: { alignItems: 'center', maxWidth: 180 },
+  playerStale: { opacity: 0.7 },
+  playerDot: { width: 18, height: 18, borderRadius: 9, borderWidth: 3, borderColor: '#ffffff' },
+  playerLabel: {
+    color: colours.text,
+    fontFamily: fonts.semibold,
+    fontSize: 12,
+    backgroundColor: 'rgba(11,16,12,0.8)',
     paddingHorizontal: 4,
     borderRadius: 4,
     marginTop: 2,

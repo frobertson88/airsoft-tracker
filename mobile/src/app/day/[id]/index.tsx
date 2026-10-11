@@ -1,6 +1,7 @@
-// Game tab. Stage 1 has no games yet, so this shows the lobby (docs/design-direction.md).
+// Game tab: your assignment, the current game and clock, and your squad (docs/design-direction.md).
 import { StyleSheet, Text, View } from 'react-native';
 import { MemberRow } from '../../../components/MemberList';
+import { GameClock } from '../../../components/GameClock';
 import { Body, Card, Display, Label, Screen } from '../../../components/ui';
 import { useDay } from '../../../lib/day';
 import { colours, space, teamColour, fonts } from '../../../theme';
@@ -31,14 +32,18 @@ export default function GameTab() {
         <Body muted>Hosting, not playing</Body>
       )}
 
-      <Card style={{ padding: space.lg, gap: space.md }}>
-        <Text style={styles.kicker}>Next up</Text>
-        <Display size={32}>No game yet</Display>
-        <View style={styles.waiting}>
-          <View style={styles.dot} />
-          <Body>Waiting for the host to start</Body>
-        </View>
-      </Card>
+      {data.game ? (
+        <GameClock game={data.game} />
+      ) : (
+        <Card style={{ padding: space.lg, gap: space.md }}>
+          <Text style={styles.kicker}>Next up</Text>
+          <Display size={32}>No game yet</Display>
+          <View style={styles.waiting}>
+            <View style={styles.dot} />
+            <Body>Waiting for the host to set up a game</Body>
+          </View>
+        </Card>
+      )}
 
       {team && (
         <>

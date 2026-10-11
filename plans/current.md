@@ -1,6 +1,6 @@
 # Current plan
 
-Status: Stage 3 planned, 11 October 2026; not started. Earlier stages: [Stage 1](stage1-2026-10-11.md), [Stage 2](stage2-2026-10-11.md).
+Status: Stage 3 built 11 October 2026 (migration 0004 applied to Supabase); waiting on phone testing. Earlier stages: [Stage 1](stage1-2026-10-11.md), [Stage 2](stage2-2026-10-11.md).
 
 ## Stage 3 — Games and live positions
 
@@ -15,7 +15,7 @@ An admin sets up a game and runs it through countdown, live, pause and end, and 
 3. **Between games:** Play again (same settings, new game) and Set up a new game. Teams, sections and roles carry over.
 4. **Player view:** Game tab shows the state banner and clock for everyone; a short vibration on start, pause, resume and end. Countdown shows a big timer.
 5. **Position sharing:** while you're in an open Game Day (lobby, live, paused, between games), your phone sends its position about every 5 seconds when moving, with accuracy and time. A **Battery saver** setting in More/Host sends less often (about every 20 seconds). Sending stops when you leave or are removed, or the day closes.
-6. **Map tab:** your own team's players with callsigns, coloured by section; positions older than a minute are greyed with an age label ("2 min ago"). Enemy positions are never sent to your phone (filtered in the database). Admins who are hosting without playing see everyone. Your own status shows **Tracking unavailable** if location is off.
+6. **Map tab:** your own team's players in team colour, labelled with callsign and section; positions older than a minute are greyed with an age label ("2 min ago"). Enemy positions are never sent to your phone (filtered in the database). Admins who are hosting without playing see everyone. Your own status shows **Tracking unavailable** if location is off.
 7. **Reconnects:** reopening the app or getting signal back reloads the game state and clock from the backend.
 8. **Tests:** lifecycle transitions and who can make them, clock maths across pause/resume, position visibility between teams, stopping on leave/remove/close.
 

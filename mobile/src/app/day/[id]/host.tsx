@@ -3,6 +3,8 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { FieldPicker } from '../../../components/FieldPicker';
+import { GameControls } from '../../../components/GameControls';
+import { TrackingSettings } from '../../../components/TrackingSettings';
 import { MemberRow } from '../../../components/MemberList';
 import { Body, Button, Card, ConfirmButton, ErrorText, Label, Screen } from '../../../components/ui';
 import { api } from '../../../lib/api';
@@ -25,6 +27,9 @@ export default function HostTab() {
 
   return (
     <Screen>
+      <GameControls />
+
+      <Label>Lobby</Label>
       <Card style={{ padding: space.lg, gap: space.md }}>
         <View style={styles.between}>
           <Body muted>Lobby</Body>
@@ -84,16 +89,13 @@ export default function HostTab() {
       </Card>
       {picking && <FieldPicker onClose={() => setPicking(false)} />}
 
-      <Label>Next game</Label>
-      <Card>
-        <Body muted>Starting games comes in a later stage.</Body>
-      </Card>
 
       <Label>You</Label>
       <Card>
         <Body>{profile?.callsign}</Body>
         <Button title="Edit profile" variant="secondary" onPress={() => router.push('/profile')} />
       </Card>
+      <TrackingSettings />
 
       <Label>Game Day</Label>
       <ConfirmButton

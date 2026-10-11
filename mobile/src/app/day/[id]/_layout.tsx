@@ -1,11 +1,14 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Tabs, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
-import { Pressable, Text, type ColorValue } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Pressable, Text, Vibration, type ColorValue } from 'react-native';
 import { AssignmentSetup } from '../../../components/AssignmentSetup';
 import { Body, Button, Loading, Screen, Title } from '../../../components/ui';
+import { api } from '../../../lib/api';
 import { DayProvider, useDay } from '../../../lib/day';
+import { clockFor, useServerNow, type GameState } from '../../../lib/game';
 import { goHome } from '../../../lib/nav';
+import { TrackingProvider } from '../../../lib/tracking';
 import { colours, fonts } from '../../../theme';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
@@ -13,6 +16,39 @@ function icon(name: IconName) {
   return function TabIcon({ color, size }: { color: ColorValue; size: number }) {
     return <Ionicons name={name} color={color as string} size={size} />;
   };
+}
+
+// Keeps the game moving on time and buzzes the phone when its state changes.
+// The backend advances lazily, so when this phone's projected clock says a
+// countdown or timed game is over, it nudges the backend with tick_game.
+function GameWatcher() {
+  const { data, reload } = useDay();
+  const now = useServerNow(500);
+  const game = data?.game ?? null;
+  const projected = game ? clockFor(game, now).state : null;
+  const ticked = useRef({ key: '', at: 0 });
+  const last = useRef<{ id: string; state: GameState } | null>(null);
+
+  useEffect(() => {
+    if (!game || !projected || projected === game.state) return;
+    const key = `${game.id}:${game.state}:${projected}`;
+    // Retry every couple of seconds in case the server's clock is a touch behind.
+    if (ticked.current.key === key && now - ticked.current.at < 2000) return;
+    ticked.current = { key, at: now };
+    api.tickGame(game.id).then(reload, () => {});
+  }, [game, projected, now, reload]);
+
+  useEffect(() => {
+    if (!game || !projected) return;
+    const prev = last.current;
+    last.current = { id: game.id, state: projected };
+    if (!prev || prev.id !== game.id || prev.state === projected) return;
+    if (projected === 'live' || projected === 'paused' || projected === 'complete') {
+      Vibration.vibrate(projected === 'complete' ? [0, 400, 200, 400] : 400);
+    }
+  }, [game, projected]);
+
+  return null;
 }
 
 // Days where this admin chose to host without playing (kept for this app session).
@@ -89,38 +125,41 @@ function ActiveDay({ initiallyAssigned }: { initiallyAssigned: boolean }) {
   }
 
   return (
-    <Tabs
-      screenOptions={{
-        headerStyle: { backgroundColor: colours.background },
-        headerTintColor: colours.text,
-        headerTitleStyle: { fontFamily: fonts.display, fontSize: 20 },
-        headerTitle: data.day.name.toUpperCase(),
-        headerLeft: () => (
-          <Pressable onPress={goHome} style={{ paddingHorizontal: 16 }} accessibilityRole="button">
-            <Text style={{ color: colours.accent, fontFamily: fonts.regular, fontSize: 16 }}>Home</Text>
-          </Pressable>
-        ),
-        tabBarStyle: { backgroundColor: colours.background, borderTopColor: colours.border },
-        tabBarActiveTintColor: colours.accent,
-        tabBarInactiveTintColor: colours.textSecondary,
-        tabBarLabelStyle: { fontFamily: fonts.medium },
-        sceneStyle: { backgroundColor: colours.background },
-      }}
-    >
-      <Tabs.Screen name="index" options={{ title: 'Game', tabBarIcon: icon('radio-button-on-outline') }} />
-      <Tabs.Screen name="map" options={{ title: 'Map', tabBarIcon: icon('map-outline') }} />
-      <Tabs.Screen name="scan" options={{ title: 'Scan', tabBarIcon: icon('scan-outline') }} />
-      <Tabs.Screen name="team" options={{ title: 'Squad', tabBarIcon: icon('people-outline') }} />
-      {/* Admins get Host in place of More (docs/app-flow.md §5). */}
-      <Tabs.Screen
-        name="more"
-        options={{ title: 'More', tabBarIcon: icon('menu-outline'), href: isAdmin ? null : undefined }}
-      />
-      <Tabs.Screen
-        name="host"
-        options={{ title: 'Host', tabBarIcon: icon('flag-outline'), href: isAdmin ? undefined : null }}
-      />
-    </Tabs>
+    <TrackingProvider dayId={id}>
+      <GameWatcher />
+      <Tabs
+        screenOptions={{
+          headerStyle: { backgroundColor: colours.background },
+          headerTintColor: colours.text,
+          headerTitleStyle: { fontFamily: fonts.display, fontSize: 20 },
+          headerTitle: data.day.name.toUpperCase(),
+          headerLeft: () => (
+            <Pressable onPress={goHome} style={{ paddingHorizontal: 16 }} accessibilityRole="button">
+              <Text style={{ color: colours.accent, fontFamily: fonts.regular, fontSize: 16 }}>Home</Text>
+            </Pressable>
+          ),
+          tabBarStyle: { backgroundColor: colours.background, borderTopColor: colours.border },
+          tabBarActiveTintColor: colours.accent,
+          tabBarInactiveTintColor: colours.textSecondary,
+          tabBarLabelStyle: { fontFamily: fonts.medium },
+          sceneStyle: { backgroundColor: colours.background },
+        }}
+      >
+        <Tabs.Screen name="index" options={{ title: 'Game', tabBarIcon: icon('radio-button-on-outline') }} />
+        <Tabs.Screen name="map" options={{ title: 'Map', tabBarIcon: icon('map-outline') }} />
+        <Tabs.Screen name="scan" options={{ title: 'Scan', tabBarIcon: icon('scan-outline') }} />
+        <Tabs.Screen name="team" options={{ title: 'Squad', tabBarIcon: icon('people-outline') }} />
+        {/* Admins get Host in place of More (docs/app-flow.md §5). */}
+        <Tabs.Screen
+          name="more"
+          options={{ title: 'More', tabBarIcon: icon('menu-outline'), href: isAdmin ? null : undefined }}
+        />
+        <Tabs.Screen
+          name="host"
+          options={{ title: 'Host', tabBarIcon: icon('flag-outline'), href: isAdmin ? undefined : null }}
+        />
+      </Tabs>
+    </TrackingProvider>
   );
 }
 

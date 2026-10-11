@@ -6,7 +6,7 @@ import { colours, fonts, radius, space } from '../theme';
 
 export type { FieldMapHandle, FieldMapProps } from './FieldMap';
 
-export const FieldMap = forwardRef<FieldMapHandle, FieldMapProps>(function FieldMap({ data, style }, ref) {
+export const FieldMap = forwardRef<FieldMapHandle, FieldMapProps>(function FieldMap({ data, players, style }, ref) {
   useImperativeHandle(ref, () => ({ goTo: () => {}, fit: () => {} }));
   return (
     <View style={[styles.box, style]}>
@@ -16,6 +16,12 @@ export const FieldMap = forwardRef<FieldMapHandle, FieldMapProps>(function Field
         {data.areas.length === 1 ? 'area' : 'areas'} · {data.points.length}{' '}
         {data.points.length === 1 ? 'point' : 'points'}
       </Text>
+      {players?.map((p) => (
+        <Text key={p.id} style={[styles.body, { color: p.stale ? colours.textSecondary : p.colour }]}>
+          {p.label} · {p.lat.toFixed(5)}, {p.lng.toFixed(5)}
+          {p.stale ? ` · ${p.stale}` : ''}
+        </Text>
+      ))}
     </View>
   );
 });

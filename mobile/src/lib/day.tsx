@@ -15,6 +15,7 @@ import { friendlyError } from './api';
 import { useAuth } from './auth';
 import { supabase } from './supabase';
 import type { DayField } from './field';
+import { setServerOffset, type Game } from './game';
 import type { DayMember, GameDay, Section, Team } from './types';
 
 export interface DayData {
@@ -25,6 +26,8 @@ export interface DayData {
   callsigns: Record<string, string>;
   /** The field picked for this day, or null until an admin picks one. */
   field: DayField | null;
+  /** The latest game (unfinished, or the one that just ended), or null. */
+  game: Game | null;
 }
 
 interface DayState {
@@ -44,12 +47,13 @@ interface DayState {
 const DayContext = createContext<DayState | null>(null);
 
 async function fetchDay(id: string): Promise<DayData> {
-  const [day, teams, sections, members, field] = await Promise.all([
+  const [day, teams, sections, members, field, game] = await Promise.all([
     supabase.from('game_days').select('*').eq('id', id).single(),
     supabase.from('teams').select('*').eq('game_day_id', id).order('sort_order'),
     supabase.from('sections').select('*').eq('game_day_id', id).order('created_at'),
     supabase.from('day_members').select('*').eq('game_day_id', id).order('joined_at'),
     supabase.from('day_fields').select('*').eq('game_day_id', id).maybeSingle(),
+    supabase.from('games').select('*').eq('game_day_id', id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
   ]);
   // A missing day_fields table (migration not run yet) just means no field.
   const err = day.error ?? teams.error ?? sections.error ?? members.error;
@@ -69,6 +73,7 @@ async function fetchDay(id: string): Promise<DayData> {
     members: (members.data ?? []) as DayMember[],
     callsigns,
     field: (field.data ?? null) as DayField | null,
+    game: (game.data ?? null) as Game | null,
   };
 }
 
@@ -95,6 +100,10 @@ export function DayProvider({ id, children }: { id: string; children: ReactNode 
 
   useEffect(() => {
     let cancelled = false;
+    const sentAt = Date.now();
+    supabase
+      .rpc('server_now')
+      .then(({ data: now }) => now && setServerOffset(now as string, sentAt, Date.now()));
     fetchDay(id)
       .then((d) => !cancelled && setData(d))
       .catch((e) => !cancelled && setError(e instanceof Error ? e.message : 'Could not load the Game Day.'));
@@ -105,6 +114,7 @@ export function DayProvider({ id, children }: { id: string; children: ReactNode 
       .on('postgres_changes', { event: '*', schema: 'public', table: 'teams', filter }, scheduleReload)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'sections', filter }, scheduleReload)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'day_fields', filter }, scheduleReload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'games', filter }, scheduleReload)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'game_days', filter: `id=eq.${id}` }, scheduleReload)
       .subscribe();
     const appState = AppState.addEventListener('change', (s) => {

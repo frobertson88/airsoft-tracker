@@ -29,6 +29,17 @@ const MESSAGES: Record<string, string> = {
   field_not_found: 'That field no longer exists.',
   not_field_owner: 'Only the person who made this field can change it.',
   field_archived: 'That field is archived. Restore it in Fields first.',
+  game_not_found: 'That game no longer exists.',
+  game_in_progress: 'Finish the current game first.',
+  game_not_ready: 'That game has already started.',
+  game_not_counting_down: 'There’s no countdown running.',
+  game_not_live: 'The game isn’t live.',
+  game_not_paused: 'The game isn’t paused.',
+  game_not_complete: 'The game hasn’t finished yet.',
+  game_complete: 'The game has finished.',
+  game_unlimited: 'Unlimited games can’t have time added.',
+  field_required: 'Pick a field for the day before starting.',
+  invalid_time: 'Check the time and try again.',
 };
 
 export class ApiError extends Error {
@@ -102,4 +113,38 @@ export const api = {
   archiveField: (field: string, archived: boolean) =>
     rpc('archive_field', { p_field: field, p_archived: archived }),
   selectDayField: (day: string, field: string) => rpc('select_day_field', { p_day: day, p_field: field }),
+  // Games
+  createGame: (day: string, name: string, lengthSeconds: number | null, countdownSeconds: number) =>
+    rpc<string>('create_game', {
+      p_day: day,
+      p_name: name,
+      p_length_seconds: lengthSeconds,
+      p_countdown_seconds: countdownSeconds,
+    }),
+  updateGame: (game: string, name: string, lengthSeconds: number | null, countdownSeconds: number) =>
+    rpc('update_game', {
+      p_game: game,
+      p_name: name,
+      p_length_seconds: lengthSeconds,
+      p_countdown_seconds: countdownSeconds,
+    }),
+  startGame: (game: string) => rpc('start_game', { p_game: game }),
+  forceStart: (game: string) => rpc('force_start', { p_game: game }),
+  cancelCountdown: (game: string) => rpc('cancel_countdown', { p_game: game }),
+  pauseGame: (game: string) => rpc('pause_game', { p_game: game }),
+  resumeGame: (game: string, countdownSeconds = 10) =>
+    rpc('resume_game', { p_game: game, p_countdown_seconds: countdownSeconds }),
+  addTime: (game: string, seconds: number) => rpc('add_time', { p_game: game, p_seconds: seconds }),
+  endGame: (game: string) => rpc('end_game', { p_game: game }),
+  playAgain: (game: string) => rpc<string>('play_again', { p_game: game }),
+  tickGame: (game: string) => rpc('tick_game', { p_game: game }),
+  serverNow: () => rpc<string>('server_now'),
+  reportPosition: (day: string, lat: number, lng: number, accuracy: number | null, recordedAt: string) =>
+    rpc('report_position', {
+      p_day: day,
+      p_lat: lat,
+      p_lng: lng,
+      p_accuracy: accuracy,
+      p_recorded_at: recordedAt,
+    }),
 };

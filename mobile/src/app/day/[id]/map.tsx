@@ -1,18 +1,50 @@
-// Map tab: the day's field with your own position (docs/field-library.md).
-// Sharing positions with your team comes with tracking in Stage 3.
+// Map tab: the day's field, your own position and your team's live positions
+// (docs/field-library.md, docs/location-and-device-operation.md).
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Location from 'expo-location';
 import { router } from 'expo-router';
-import { useRef } from 'react';
+import { useMemo, useRef } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import { FieldMap, type FieldMapHandle } from '../../../components/FieldMap';
+import { FieldMap, type FieldMapHandle, type MapPlayer } from '../../../components/FieldMap';
 import { Body, Button, Screen } from '../../../components/ui';
 import { useDay } from '../../../lib/day';
-import { colours, fonts, radius, space } from '../../../theme';
+import { useServerNow } from '../../../lib/game';
+import { ageLabel, HIDDEN_MS, STALE_MS, usePositions } from '../../../lib/positions';
+import { TRACKING_LABEL, useTracking } from '../../../lib/tracking';
+import { colours, fonts, radius, space, teamColour } from '../../../theme';
 
 export default function MapTab() {
-  const { id, data, isAdmin } = useDay();
+  const { id, data, me, isAdmin, callsign, teamById, sectionById } = useDay();
+  const tracking = useTracking();
   const mapRef = useRef<FieldMapHandle>(null);
+  // Re-read positions when who's on which team changes.
+  const membersKey = data?.members.map((m) => `${m.user_id}:${m.status}:${m.team_id}`).join(',');
+  const positions = usePositions(id, membersKey);
+  const now = useServerNow(15000);
+
+  const players = useMemo<MapPlayer[]>(() => {
+    if (!data) return [];
+    const out: MapPlayer[] = [];
+    for (const p of Object.values(positions)) {
+      if (p.user_id === me?.user_id) continue; // the map's own blue dot shows you
+      const m = data.members.find((x) => x.user_id === p.user_id && x.status === 'active');
+      if (!m) continue;
+      const age = now - Date.parse(p.recorded_at);
+      if (age > HIDDEN_MS) continue;
+      const team = teamById(m.team_id);
+      const section = sectionById(m.section_id);
+      out.push({
+        id: p.user_id,
+        lat: p.lat,
+        lng: p.lng,
+        label: [callsign(p.user_id), section?.name].filter(Boolean).join(' · '),
+        colour: team ? teamColour(team.colour) : colours.text,
+        stale: age > STALE_MS ? ageLabel(age) : undefined,
+      });
+    }
+    return out;
+  }, [data, positions, now, me, callsign, teamById, sectionById]);
+
   if (!data) return null;
 
   const field = data.field;
@@ -37,7 +69,7 @@ export default function MapTab() {
 
   return (
     <View style={styles.screen}>
-      <FieldMap ref={mapRef} data={field.data} showsUserLocation={Platform.OS !== 'web'} />
+      <FieldMap ref={mapRef} data={field.data} players={players} showsUserLocation={Platform.OS !== 'web'} />
       <View style={styles.banner} pointerEvents="none">
         <Text style={styles.fieldName}>{field.name}</Text>
         <View style={styles.legend}>
@@ -47,6 +79,11 @@ export default function MapTab() {
           <Text style={styles.legendText}>Danger</Text>
         </View>
       </View>
+      {tracking.status !== 'sharing' && (
+        <Pressable onPress={tracking.retry} style={styles.trackingBar} accessibilityRole="button">
+          <Text style={styles.trackingText}>{TRACKING_LABEL[tracking.status]}</Text>
+        </Pressable>
+      )}
       <View style={styles.fabs}>
         <Pressable onPress={() => mapRef.current?.fit()} accessibilityRole="button" accessibilityLabel="Show whole field" style={styles.fab}>
           <Ionicons name="scan-outline" size={22} color={colours.text} />
@@ -79,6 +116,18 @@ const styles = StyleSheet.create({
   legendText: { color: colours.textSecondary, fontFamily: fonts.regular, fontSize: 12, marginRight: space.xs },
   swatch: { width: 14, height: 14, borderRadius: 3, borderColor: colours.danger, borderWidth: 1 },
   swatchDashed: { borderStyle: 'dashed', borderWidth: 2 },
+  trackingBar: {
+    position: 'absolute',
+    left: space.sm,
+    right: 72,
+    bottom: space.md,
+    backgroundColor: 'rgba(11,16,12,0.9)',
+    borderColor: colours.danger,
+    borderWidth: 1,
+    borderRadius: radius,
+    padding: space.md,
+  },
+  trackingText: { color: colours.text, fontFamily: fonts.medium, fontSize: 14 },
   fabs: { position: 'absolute', right: space.md, bottom: space.md, gap: space.sm },
   fab: {
     width: 48,

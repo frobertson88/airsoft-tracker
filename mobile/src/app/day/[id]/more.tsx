@@ -1,4 +1,5 @@
 import { router } from 'expo-router';
+import { TrackingSettings } from '../../../components/TrackingSettings';
 import { Body, Button, Card, ConfirmButton, ErrorText, Label, Screen } from '../../../components/ui';
 import { api } from '../../../lib/api';
 import { useAuth } from '../../../lib/auth';
@@ -17,6 +18,7 @@ export default function MoreTab() {
         <Body>{profile?.callsign}</Body>
         <Button title="Edit profile" variant="secondary" onPress={() => router.push('/profile')} />
       </Card>
+      <TrackingSettings />
 
       <Label>Leave</Label>
       <ConfirmButton
