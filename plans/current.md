@@ -1,53 +1,43 @@
 # Current plan
 
-Status: Stage 2 built, 11 October 2026; awaiting migration 0003 in Supabase and phone testing. Stage 1 is archived in [stage1-2026-10-11.md](stage1-2026-10-11.md).
+Status: Stage 3 planned, 11 October 2026; not started. Earlier stages: [Stage 1](stage1-2026-10-11.md), [Stage 2](stage2-2026-10-11.md).
 
-## Stage 2 — Field Library and map
+## Stage 3 — Games and live positions
 
 ### Outcome
 
-An organiser saves a field once (boundary, No-go and Danger areas, labelled points) and picks it when hosting a Game Day. Everyone in the day sees that field on the Map tab with their own position. No games are played yet.
-
-### Map choice
-
-Built-in maps through `react-native-maps` (Apple Maps on iPhone, Google Maps on Android), chosen 11 October 2026. Works in Expo Go, has satellite view, needs no account for testing. A free Google Maps key is needed for Android release builds. Revisit MapLibre/Mapbox only if offline maps become essential. The web version shows a simple placeholder instead of a map.
+An admin sets up a game and runs it through countdown, live, pause and end, and every phone follows the same state and clock. While in a Game Day, each phone shares its position; the Map tab shows your own team's players live, with stale positions labelled. No scoring or game modes yet (King of the Hill is Stage 4).
 
 ### Scope
 
-Follows the first useful slice in [Field Library](../docs/field-library.md#first-useful-scope-and-checks).
-
-1. **Field Library** (Home → Fields): list my saved fields; Create, Open/Edit, Duplicate, Archive. Only the creator edits a saved field.
-2. **Field editor:** name, optional location and notes; find the field on a satellite map and set the starting view; draw the playable boundary by tapping corners (Finish/Cancel/Undo); add No-go and Danger areas with a name and instruction; place labelled points (staging, respawn, base, marshal point, other). Review, then Save Field.
-3. **Validation before Save:** name, a closed boundary of at least 3 corners that doesn't cross itself, and valid areas/points. Only valid fields are saved; cancelling keeps the last saved version.
-4. **Pick a field for the day:** Host tab shows **Field not selected** → Choose field → review → confirm. Confirming copies the field into the day (a snapshot); later template edits don't change the day.
-5. **Map tab:** satellite map of the day's field with boundary, No-go (labelled, hatched), Danger (labelled) and points; your own position as the usual blue dot; Recentre and Fit field buttons. Before a field is picked it says so.
-6. **Database:** fields and field revisions owned by their creator; a day field copy; all changes through backend functions; tests for ownership, validation and snapshot copying.
+1. **Game setup (Host tab):** Set up game with a name, a length (minutes) or Unlimited, and a start countdown (off, or a number of seconds/minutes). One game at a time; results kept after it ends.
+2. **Lifecycle on the backend:** Ready → Countdown → Live ⇄ Paused → Complete ([architecture §4](../docs/architecture.md#4-shared-lifecycle-and-clock)). Admin actions: Start countdown / Start now, Force start, Cancel countdown (back to Ready), Pause, Resume with a 10 second countdown (cancel leaves it Paused), Add time, End game. The game clock is counted on the backend and frozen while paused or in a resume countdown; games with a length end automatically.
+3. **Between games:** Play again (same settings, new game) and Set up a new game. Teams, sections and roles carry over.
+4. **Player view:** Game tab shows the state banner and clock for everyone; a short vibration on start, pause, resume and end. Countdown shows a big timer.
+5. **Position sharing:** while you're in an open Game Day (lobby, live, paused, between games), your phone sends its position about every 5 seconds when moving, with accuracy and time. A **Battery saver** setting in More/Host sends less often (about every 20 seconds). Sending stops when you leave or are removed, or the day closes.
+6. **Map tab:** your own team's players with callsigns, coloured by section; positions older than a minute are greyed with an age label ("2 min ago"). Enemy positions are never sent to your phone (filtered in the database). Admins who are hosting without playing see everyone. Your own status shows **Tracking unavailable** if location is off.
+7. **Reconnects:** reopening the app or getting signal back reloads the game state and clock from the backend.
+8. **Tests:** lifecycle transitions and who can make them, clock maths across pause/resume, position visibility between teams, stopping on leave/remove/close.
 
 ### Defaults chosen for this stage
 
-- Areas may extend past the boundary; holes inside areas are not supported yet.
-- All points are visible to everyone in the day. Team-only start points wait until team mapping is designed.
-- Your own position is shown on your phone only; sharing positions with your team is Stage 3 (tracking).
-- To change the day's field, edit the saved field and pick it again on the Host tab (this replaces the day's copy). A separate "edit this day's copy" screen and the pause/live rules come with games in Stage 3.
-- The field opens on the view you leave the editor map on when you save.
-- Fields are edited on the phone; the web version shows a placeholder instead of a map.
-- No automatic boundary warnings, NFC binding, imports or sharing fields with other hosts.
+- Positions are shared while the app is open on screen (Expo Go). Pocket tracking with the screen locked needs our own test build and comes later.
+- Only each player's latest position is stored. Route recording and after-round replay come in a later stage with the 30-day deletion.
+- Stale after 60 seconds; positions hidden after 15 minutes without an update.
+- No push notifications; alerts are in-app with vibration.
 
 ### Exclusions
 
-Games and lifecycle, sharing positions, team-only icons, tactical drawings and markers, NFC point registration, offline maps, the Daylight scheme.
+Game modes and scoring (KOTH is Stage 4), medic and hits, NFC, route recording and replay, background/locked-screen tracking, push notifications, offline play.
 
 ### Acceptance checks
 
-- [ ] Create, save, reopen, edit, duplicate and archive a field without losing its shapes or labels.
-- [ ] Saving is refused for an unfinished or self-crossing boundary; cancelling an edit keeps the last saved version.
-- [ ] A new day shows Field not selected; an admin picks and confirms a field; players see it on the Map tab within a few seconds.
-- [ ] Editing the saved field afterwards doesn't change the day's copy.
-- [ ] Non-creators can't edit a saved field, and non-admins can't change the day's field, even by calling the backend directly.
-- [ ] The Map tab shows your own position and works on iPhone and Android in Expo Go.
-
-## Progress
-
-- Database: `supabase/migrations/0003_fields.sql` (fields, day_fields, save/duplicate/archive/select commands, shape validation including self-crossing edges). 27 database tests pass across all three migrations.
-- App: Home → Fields (library, archive/restore, duplicate), field editor (`app/fields/[id].tsx`) with search, my location, Boundary / No-go / Danger / Point tools, Undo/Finish/Cancel; Host tab field card and picker with map review; Map tab with field, own position, Show whole field and My location. `react-native-maps` 1.27.2 (Expo SDK 57's version). Type check and lint pass.
-- Not yet verified on a phone.
+- [ ] Admin sets up a game, starts a countdown, and both phones switch to Live at the same moment.
+- [ ] Pause freezes the clock on every phone; resume counts down 10 seconds before Live.
+- [ ] Cancel countdown returns to Ready; Force start goes Live immediately keeping the full length.
+- [ ] A timed game ends by itself; Add time extends it; End game ends it early. Play again starts a fresh game.
+- [ ] Non-admins can't change the game state, even by calling the backend directly.
+- [ ] Teammates see each other moving on the map within a few seconds; the other team never receives your position.
+- [ ] A phone that stops sending shows greyed with its age; leaving the day stops sharing.
+- [ ] Closing and reopening the app mid-game shows the right state and clock.
+- [ ] One hour live with the screen on: note battery used on each phone (normal vs battery saver).
