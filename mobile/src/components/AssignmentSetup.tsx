@@ -1,143 +1,231 @@
-// One-screen check in: team, today's role, optional section (docs/app-flow.md §3).
+// Check in / change assignment (docs/app-flow.md §3), laid out like Squad:
+// each team is a card; the chosen team opens to show its sections with their
+// lead and players. Choices are local until you press the button, which saves
+// them in one go.
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { api } from '../lib/api';
 import { useCommand, useDay } from '../lib/day';
-import { ROLE_CHOICES } from '../lib/types';
-import { colours, display, radius, space, teamColour, fonts } from '../theme';
+import { ROLE_CHOICES, type DayRole } from '../lib/types';
+import { colours, display, fonts, radius, space, teamColour } from '../theme';
 import { Body, Button, Card, Chip, ErrorText, Field, Label, Row } from './ui';
 
-export function AssignmentSetup({ onDone, doneTitle = 'Done' }: { onDone: () => void; doneTitle?: string }) {
-  const { id, data, me, sectionById, teamById } = useDay();
-  const { run, busy, error } = useCommand();
-  const [newSection, setNewSection] = useState('');
-  const [creating, setCreating] = useState(false);
+// '' = no section; 'new' = start a new one with the typed name.
+type SectionChoice = string | '' | 'new';
+
+export function AssignmentSetup({ onDone, doneTitle = 'Save' }: { onDone: () => void; doneTitle?: string }) {
+  const { id, data, me, callsign } = useDay();
+  const { run, busy, error, setError } = useCommand();
+  const [role, setRole] = useState<DayRole | null>(me?.day_role ?? null);
+  const [team, setTeam] = useState<string | null>(me?.team_id ?? null);
+  const [section, setSection] = useState<SectionChoice>(me?.section_id ?? '');
+  const [newName, setNewName] = useState('');
   if (!data || !me) return null;
 
-  const activeMembers = data.members.filter((m) => m.status === 'active');
-  const teamSections = data.sections.filter((s) => s.team_id === me.team_id);
-  const ready = !!me.day_role && !!me.team_id;
-  const team = teamById(me.team_id);
-  const section = sectionById(me.section_id);
-  const summary = ready ? [me.day_role, team?.name, section?.name].filter(Boolean).join(' · ') : '';
+  const active = data.members.filter((m) => m.status === 'active');
+  const chosenTeam = data.teams.find((t) => t.id === team);
+  const chosenSection = data.sections.find((s) => s.id === section);
+  const ready = !!role && !!team && (section !== 'new' || !!newName.trim());
+  const summary = [
+    role,
+    chosenTeam?.name,
+    section === 'new' ? newName.trim() || 'New section' : chosenSection?.name,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
+  const pickTeam = (t: string) => {
+    if (t !== team) setSection('');
+    setTeam(t);
+  };
+
+  const save = async () => {
+    if (!role || !team) return;
+    const ok = await run(async () => {
+      if (team !== me.team_id) await api.chooseTeam(id, team);
+      if (role !== me.day_role) await api.setDayRole(id, role);
+      if (section === 'new') await api.createSection(id, newName.trim());
+      // Changing team clears the old section, so re-apply whenever the team changed.
+      else if (section !== (me.section_id ?? '') || team !== me.team_id) {
+        await api.chooseSection(id, section || null);
+      }
+    });
+    if (ok) onDone();
+  };
 
   return (
     <>
-      <Label>Team</Label>
-      <View style={styles.teams}>
-        {data.teams.map((t) => {
-          const count = activeMembers.filter((m) => m.team_id === t.id).length;
-          const selected = me.team_id === t.id;
-          const colour = teamColour(t.colour);
-          return (
-            <Pressable
-              key={t.id}
-              accessibilityRole="button"
-              accessibilityState={{ selected }}
-              onPress={() => run(() => api.chooseTeam(id, t.id))}
-              style={[styles.team, selected && { borderColor: colour, backgroundColor: colours.selection }]}
-            >
-              <Text style={[styles.teamName, { color: colour }]}>{t.name}</Text>
-              <Text style={styles.count}>
-                {count} {count === 1 ? 'player' : 'players'}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
-
       <Label>Today’s role</Label>
       <Row>
-        {ROLE_CHOICES.map((role) => (
-          <Chip
-            key={role}
-            label={role}
-            selected={me.day_role === role}
-            onPress={() => run(() => api.setDayRole(id, role))}
-          />
+        {ROLE_CHOICES.map((r) => (
+          <Chip key={r} label={r} selected={role === r} onPress={() => setRole(r)} />
         ))}
       </Row>
 
-      {me.team_id && (
-        <>
-          <Label>Section (optional)</Label>
-          <Row>
-            {teamSections.map((s) => {
-              const count = activeMembers.filter((m) => m.section_id === s.id).length;
-              return (
-                <Chip
-                  key={s.id}
-                  label={`${s.name} · ${count}`}
-                  selected={me.section_id === s.id}
-                  onPress={() => run(() => api.chooseSection(id, s.id))}
-                />
-              );
-            })}
-            <Chip label="None" selected={!me.section_id} onPress={() => run(() => api.chooseSection(id, null))} />
-          </Row>
-          {teamSections.length === 0 && <Body muted>No sections in your team yet.</Body>}
-          {!creating ? (
-            <Pressable onPress={() => setCreating(true)} accessibilityRole="button" style={styles.newLink}>
-              <Text style={styles.newLinkText}>+ Start a new section</Text>
-            </Pressable>
-          ) : (
-            <Card>
-              <Body muted>You’ll lead the new section. You can hand the lead to someone else later.</Body>
-              <Field
-                value={newSection}
-                onChangeText={setNewSection}
-                placeholder="Section name, e.g. Alpha"
-                maxLength={24}
-                autoFocus
+      <Label>Team and section</Label>
+      {data.teams.map((t) => {
+        const members = active.filter((m) => m.team_id === t.id && m.user_id !== me.user_id);
+        const sections = data.sections.filter((s) => s.team_id === t.id);
+        const open = team === t.id;
+        const colour = teamColour(t.colour);
+        return (
+          <Card key={t.id} style={open ? { borderColor: colour } : undefined}>
+            <Pressable
+              onPress={() => pickTeam(t.id)}
+              accessibilityRole="radio"
+              accessibilityState={{ selected: open }}
+              style={styles.header}
+            >
+              <View style={{ flexShrink: 1, gap: 2 }}>
+                <Text style={[styles.teamTitle, { color: colour }]}>
+                  {t.name} · {members.length + (open ? 1 : 0)}
+                </Text>
+                <Text style={styles.subtitle}>
+                  {sections.length} {sections.length === 1 ? 'section' : 'sections'}
+                </Text>
+              </View>
+              <Ionicons
+                name={open ? 'radio-button-on' : 'radio-button-off'}
+                size={24}
+                color={open ? colour : colours.textSecondary}
               />
-              <Row>
-                <Button
-                  title="Create & join"
-                  variant="quiet"
-                  disabled={!newSection.trim()}
-                  busy={busy}
-                  onPress={async () => {
-                    if (await run(() => api.createSection(id, newSection.trim()))) {
-                      setNewSection('');
-                      setCreating(false);
-                    }
-                  }}
+            </Pressable>
+
+            {open && (
+              <>
+                {sections.map((s) => {
+                  const inIt = members.filter((m) => m.section_id === s.id);
+                  const selected = section === s.id;
+                  return (
+                    <SectionRow
+                      key={s.id}
+                      title={`${s.name} · ${inIt.length + (selected ? 1 : 0)}`}
+                      subtitle={[
+                        s.leader_id ? `Lead: ${callsign(s.leader_id)}` : 'No lead',
+                        inIt
+                          .filter((m) => m.user_id !== s.leader_id)
+                          .map((m) => callsign(m.user_id))
+                          .join(', '),
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                      selected={selected}
+                      onPress={() => setSection(s.id)}
+                    />
+                  );
+                })}
+                <SectionRow
+                  title="No section"
+                  subtitle="Join one later"
+                  selected={section === ''}
+                  onPress={() => setSection('')}
                 />
-                <Button
-                  title="Cancel"
-                  variant="secondary"
-                  onPress={() => {
-                    setNewSection('');
-                    setCreating(false);
-                  }}
-                />
-              </Row>
-            </Card>
-          )}
-        </>
-      )}
+                {section === 'new' ? (
+                  <View style={styles.newBox}>
+                    <Field
+                      value={newName}
+                      onChangeText={(v) => {
+                        setNewName(v);
+                        setError('');
+                      }}
+                      placeholder="New section name, e.g. Alpha"
+                      maxLength={24}
+                      autoFocus
+                    />
+                    <Text style={styles.subtitle}>You’ll lead it. You can hand the lead on later.</Text>
+                  </View>
+                ) : (
+                  <Pressable onPress={() => setSection('new')} accessibilityRole="button" style={styles.newLink}>
+                    <Text style={styles.newLinkText}>+ Start a new section</Text>
+                  </Pressable>
+                )}
+              </>
+            )}
+          </Card>
+        );
+      })}
 
       <ErrorText>{error}</ErrorText>
       <Body muted>Your team sees your position while you’re in this Game Day.</Body>
-      <Button title={ready ? `${doneTitle} · ${summary}` : doneTitle} onPress={onDone} disabled={!ready} />
+      <Button
+        title={ready ? `${doneTitle} · ${summary}` : role ? 'Pick a team' : 'Pick a role'}
+        onPress={save}
+        busy={busy}
+        disabled={!ready}
+      />
     </>
   );
 }
 
+function SectionRow({
+  title,
+  subtitle,
+  selected,
+  onPress,
+}: {
+  title: string;
+  subtitle?: string;
+  selected: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="radio"
+      accessibilityState={{ selected }}
+      style={[styles.section, selected && styles.sectionSelected]}
+    >
+      <View style={{ flexShrink: 1, gap: 2 }}>
+        <Text style={styles.sectionTitle}>{title}</Text>
+        {subtitle ? (
+          <Text style={styles.subtitle} numberOfLines={2}>
+            {subtitle}
+          </Text>
+        ) : null}
+      </View>
+      <Ionicons
+        name={selected ? 'checkmark-circle' : 'ellipse-outline'}
+        size={22}
+        color={selected ? colours.accent : colours.textSecondary}
+      />
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
-  teams: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
-  team: {
-    flexGrow: 1,
-    flexBasis: '45%',
-    gap: space.xs,
-    padding: space.lg,
-    borderRadius: radius + 2,
-    borderWidth: 2,
-    borderColor: colours.border,
-    backgroundColor: colours.surface,
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minHeight: 44, gap: space.sm },
+  teamTitle: { fontSize: 24, ...display },
+  sectionTitle: {
+    color: colours.text,
+    fontSize: 18,
+    fontFamily: fonts.displaySemi,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
-  teamName: { fontSize: 26, ...display },
+  subtitle: { color: colours.textSecondary, fontFamily: fonts.regular, fontSize: 13 },
+  section: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: space.sm,
+    minHeight: 52,
+    backgroundColor: colours.background,
+    borderColor: colours.border,
+    borderWidth: 1,
+    borderRadius: radius,
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm,
+  },
+  sectionSelected: { borderColor: colours.accent, backgroundColor: colours.selection },
+  newBox: {
+    gap: space.sm,
+    borderColor: colours.accent,
+    borderWidth: 1,
+    borderRadius: radius,
+    backgroundColor: colours.selection,
+    padding: space.md,
+  },
   newLink: { minHeight: 44, justifyContent: 'center' },
   newLinkText: { color: colours.accent, fontFamily: fonts.medium, fontSize: 15 },
-  count: { color: colours.textSecondary, fontFamily: fonts.regular, fontSize: 13 },
 });
