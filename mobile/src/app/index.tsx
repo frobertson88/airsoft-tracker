@@ -79,6 +79,16 @@ export default function Home() {
         <Text style={styles.hostText}>Host a game day</Text>
       </Pressable>
 
+      <Pressable
+        onPress={() => router.push('/fields')}
+        accessibilityRole="button"
+        style={({ pressed }) => [styles.fields, pressed && { opacity: 0.6 }]}
+      >
+        <Ionicons name="map-outline" size={20} color={colours.textSecondary} />
+        <Text style={styles.fieldsText}>Fields</Text>
+        <Text style={styles.fieldsMeta}>Set up a field once, reuse it</Text>
+      </Pressable>
+
       {history.length > 0 && <Label>History</Label>}
       {history.map((d) => (
         <Card key={d.game_day_id}>
@@ -114,5 +124,18 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
     borderColor: colours.border,
   },
+  fields: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    minHeight: 52,
+    paddingHorizontal: space.md,
+    borderRadius: radius,
+    borderWidth: 1,
+    borderColor: colours.border,
+    backgroundColor: colours.surface,
+  },
+  fieldsText: { color: colours.text, fontFamily: fonts.semibold, fontSize: 16 },
+  fieldsMeta: { color: colours.textSecondary, fontFamily: fonts.regular, fontSize: 13, flexShrink: 1 },
   hostText: { color: colours.accent, fontFamily: fonts.semibold, fontSize: 16 },
 });

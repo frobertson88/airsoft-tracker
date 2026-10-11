@@ -1,18 +1,21 @@
 // Host tab: admins manage the day here instead of an Admin Mode switch (docs/app-flow.md §12).
 import { router } from 'expo-router';
+import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { FieldPicker } from '../../../components/FieldPicker';
 import { MemberRow } from '../../../components/MemberList';
 import { Body, Button, Card, ConfirmButton, ErrorText, Label, Screen } from '../../../components/ui';
 import { api } from '../../../lib/api';
 import { useAuth } from '../../../lib/auth';
 import { useCommand, useDay } from '../../../lib/day';
 import { goHome } from '../../../lib/nav';
-import { colours, space, teamColour, fonts } from '../../../theme';
+import { colours, display, space, teamColour, fonts } from '../../../theme';
 
 export default function HostTab() {
   const { id, data, isAdmin } = useDay();
   const { profile } = useAuth();
   const { run, busy, error } = useCommand();
+  const [picking, setPicking] = useState(false);
   if (!data || !isAdmin) return null;
 
   const active = data.members.filter((m) => m.status === 'active');
@@ -58,6 +61,29 @@ export default function HostTab() {
         onPress={() => router.navigate(`/day/${id}/team`)}
       />
 
+      <Label>Field</Label>
+      <Card>
+        {data.field ? (
+          <>
+            <Text style={styles.fieldName}>{data.field.name}</Text>
+            <Body muted>
+              {[data.field.location, `${data.field.data.areas.length} areas`, `${data.field.data.points.length} points`]
+                .filter(Boolean)
+                .join(' · ')}
+            </Body>
+            <Button title="Review on map" variant="quiet" onPress={() => router.navigate(`/day/${id}/map`)} />
+            <Button title="Change field" variant="secondary" onPress={() => setPicking(true)} />
+          </>
+        ) : (
+          <>
+            <Text style={[styles.fieldName, { color: colours.danger }]}>Field not selected</Text>
+            <Body muted>Pick a field before the first game. Players see it on the Map tab.</Body>
+            <Button title="Choose field" onPress={() => setPicking(true)} />
+          </>
+        )}
+      </Card>
+      {picking && <FieldPicker onClose={() => setPicking(false)} />}
+
       <Label>Next game</Label>
       <Card>
         <Body muted>Starting games comes in a later stage.</Body>
@@ -94,5 +120,6 @@ export default function HostTab() {
 const styles = StyleSheet.create({
   between: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   mono: { color: colours.text, fontFamily: fonts.regular, fontSize: 14, fontVariant: ['tabular-nums'] },
+  fieldName: { color: colours.text, fontSize: 22, ...display },
   bar: { flexDirection: 'row', height: 10, borderRadius: 5, overflow: 'hidden', gap: 2 },
 });

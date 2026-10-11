@@ -1,6 +1,7 @@
 // Thin wrappers over the backend command functions (supabase/migrations).
 // Every gameplay/membership change goes through these; screens never write tables.
 import { supabase } from './supabase';
+import type { FieldData } from './field';
 import type { DayRole, OpenDay } from './types';
 
 const MESSAGES: Record<string, string> = {
@@ -19,6 +20,15 @@ const MESSAGES: Record<string, string> = {
   not_removed: 'That player is not removed.',
   not_section_lead: 'Only the section lead or an admin can change the lead.',
   not_in_section: 'That player is not in this section.',
+  field_invalid: 'This field couldn’t be saved. Check its shapes and try again.',
+  field_view_invalid: 'Move the map to the field before saving.',
+  field_boundary_invalid: 'Draw a boundary with at least 3 corners and no crossing edges.',
+  field_area_invalid: 'Each No-go and Danger area needs a name and at least 3 corners with no crossing edges.',
+  field_point_invalid: 'Each point needs a label.',
+  field_too_big: 'Too many areas or points (50 areas and 100 points at most).',
+  field_not_found: 'That field no longer exists.',
+  not_field_owner: 'Only the person who made this field can change it.',
+  field_archived: 'That field is archived. Restore it in Fields first.',
 };
 
 export class ApiError extends Error {
@@ -79,4 +89,17 @@ export const api = {
   removeMember: (day: string, user: string) => rpc('remove_member', { p_day: day, p_user: user }),
   readmitMember: (day: string, user: string) => rpc('readmit_member', { p_day: day, p_user: user }),
   closeGameDay: (day: string) => rpc('close_game_day', { p_day: day }),
+  // Field Library
+  saveField: (field: string | null, name: string, location: string, notes: string, data: FieldData) =>
+    rpc<string>('save_field', {
+      p_field: field,
+      p_name: name,
+      p_location: location,
+      p_notes: notes,
+      p_data: data,
+    }),
+  duplicateField: (field: string) => rpc<string>('duplicate_field', { p_field: field }),
+  archiveField: (field: string, archived: boolean) =>
+    rpc('archive_field', { p_field: field, p_archived: archived }),
+  selectDayField: (day: string, field: string) => rpc('select_day_field', { p_day: day, p_field: field }),
 };

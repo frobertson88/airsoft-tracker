@@ -14,6 +14,7 @@ import { AppState } from 'react-native';
 import { friendlyError } from './api';
 import { useAuth } from './auth';
 import { supabase } from './supabase';
+import type { DayField } from './field';
 import type { DayMember, GameDay, Section, Team } from './types';
 
 export interface DayData {
@@ -22,6 +23,8 @@ export interface DayData {
   sections: Section[];
   members: DayMember[];
   callsigns: Record<string, string>;
+  /** The field picked for this day, or null until an admin picks one. */
+  field: DayField | null;
 }
 
 interface DayState {
@@ -41,12 +44,14 @@ interface DayState {
 const DayContext = createContext<DayState | null>(null);
 
 async function fetchDay(id: string): Promise<DayData> {
-  const [day, teams, sections, members] = await Promise.all([
+  const [day, teams, sections, members, field] = await Promise.all([
     supabase.from('game_days').select('*').eq('id', id).single(),
     supabase.from('teams').select('*').eq('game_day_id', id).order('sort_order'),
     supabase.from('sections').select('*').eq('game_day_id', id).order('created_at'),
     supabase.from('day_members').select('*').eq('game_day_id', id).order('joined_at'),
+    supabase.from('day_fields').select('*').eq('game_day_id', id).maybeSingle(),
   ]);
+  // A missing day_fields table (migration not run yet) just means no field.
   const err = day.error ?? teams.error ?? sections.error ?? members.error;
   if (err) throw new Error(err.message);
 
@@ -63,6 +68,7 @@ async function fetchDay(id: string): Promise<DayData> {
     sections: (sections.data ?? []) as Section[],
     members: (members.data ?? []) as DayMember[],
     callsigns,
+    field: (field.data ?? null) as DayField | null,
   };
 }
 
@@ -98,6 +104,7 @@ export function DayProvider({ id, children }: { id: string; children: ReactNode 
       .on('postgres_changes', { event: '*', schema: 'public', table: 'day_members', filter }, scheduleReload)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'teams', filter }, scheduleReload)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'sections', filter }, scheduleReload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'day_fields', filter }, scheduleReload)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'game_days', filter: `id=eq.${id}` }, scheduleReload)
       .subscribe();
     const appState = AppState.addEventListener('change', (s) => {

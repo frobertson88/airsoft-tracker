@@ -1,6 +1,6 @@
 # Current plan
 
-Status: Stage 2 planned, 11 October 2026; not started. Stage 1 is archived in [stage1-2026-10-11.md](stage1-2026-10-11.md).
+Status: Stage 2 built, 11 October 2026; awaiting migration 0003 in Supabase and phone testing. Stage 1 is archived in [stage1-2026-10-11.md](stage1-2026-10-11.md).
 
 ## Stage 2 — Field Library and map
 
@@ -28,7 +28,9 @@ Follows the first useful slice in [Field Library](../docs/field-library.md#first
 - Areas may extend past the boundary; holes inside areas are not supported yet.
 - All points are visible to everyone in the day. Team-only start points wait until team mapping is designed.
 - Your own position is shown on your phone only; sharing positions with your team is Stage 3 (tracking).
-- Editing the day's copy of a field is allowed while the day is in setup; pause/live rules come with games in Stage 3.
+- To change the day's field, edit the saved field and pick it again on the Host tab (this replaces the day's copy). A separate "edit this day's copy" screen and the pause/live rules come with games in Stage 3.
+- The field opens on the view you leave the editor map on when you save.
+- Fields are edited on the phone; the web version shows a placeholder instead of a map.
 - No automatic boundary warnings, NFC binding, imports or sharing fields with other hosts.
 
 ### Exclusions
@@ -43,3 +45,9 @@ Games and lifecycle, sharing positions, team-only icons, tactical drawings and m
 - [ ] Editing the saved field afterwards doesn't change the day's copy.
 - [ ] Non-creators can't edit a saved field, and non-admins can't change the day's field, even by calling the backend directly.
 - [ ] The Map tab shows your own position and works on iPhone and Android in Expo Go.
+
+## Progress
+
+- Database: `supabase/migrations/0003_fields.sql` (fields, day_fields, save/duplicate/archive/select commands, shape validation including self-crossing edges). 27 database tests pass across all three migrations.
+- App: Home → Fields (library, archive/restore, duplicate), field editor (`app/fields/[id].tsx`) with search, my location, Boundary / No-go / Danger / Point tools, Undo/Finish/Cancel; Host tab field card and picker with map review; Map tab with field, own position, Show whole field and My location. `react-native-maps` 1.27.2 (Expo SDK 57's version). Type check and lint pass.
+- Not yet verified on a phone.
