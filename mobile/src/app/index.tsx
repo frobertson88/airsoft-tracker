@@ -1,5 +1,5 @@
-// Home: join a Game Day first, then your kit, with hosting last since only one
-// person hosts each day (docs/design-direction.md).
+// Home: join a Game Day first; History and Hosting (Fields, Host a game day)
+// sit below, since only one person hosts each day (docs/design-direction.md).
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback } from 'react';
@@ -80,23 +80,10 @@ export default function Home() {
       <Body muted>Tap a game day to join it, then pick your team.</Body>
       <OpenDays days={open.days} error={open.error} />
 
-      <Label>Your kit</Label>
       <View style={styles.kit}>
-        <KitRow icon="map-outline" title="Fields" meta="Set up a field once, reuse it" href="/fields" />
-        <View style={styles.divider} />
         <KitRow icon="time-outline" title="History" meta="Game days you've played" href="/history" />
-      </View>
-
-      <View style={styles.hostBox}>
-        <Body muted>Running the day?</Body>
-        <Pressable
-          onPress={() => router.push('/create')}
-          accessibilityRole="button"
-          style={({ pressed }) => [styles.host, pressed && { opacity: 0.6 }]}
-        >
-          <Ionicons name="flag-outline" size={18} color={colours.accent} />
-          <Text style={styles.hostText}>Host a game day</Text>
-        </Pressable>
+        <View style={styles.divider} />
+        <KitRow icon="flag-outline" title="Hosting" meta="Fields and hosting a game day" href="/hosting" />
       </View>
     </Screen>
   );
@@ -126,17 +113,4 @@ const styles = StyleSheet.create({
   kitTitle: { color: colours.text, fontFamily: fonts.semibold, fontSize: 16 },
   kitMeta: { color: colours.textSecondary, fontFamily: fonts.regular, fontSize: 13 },
   divider: { height: 1, backgroundColor: colours.border, marginLeft: space.md + 20 + space.md },
-  hostBox: { marginTop: space.lg, alignItems: 'center', gap: space.xs },
-  host: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.sm,
-    minHeight: 44,
-    paddingHorizontal: space.lg,
-    borderRadius: radius,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: colours.border,
-  },
-  hostText: { color: colours.accent, fontFamily: fonts.semibold, fontSize: 15 },
 });

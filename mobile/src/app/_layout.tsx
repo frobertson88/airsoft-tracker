@@ -34,6 +34,7 @@ function RootStack() {
         <Stack.Screen name="join" options={{ title: 'Join Game Day' }} />
         <Stack.Screen name="profile" options={{ title: 'Profile' }} />
         <Stack.Screen name="history" options={{ title: 'History' }} />
+        <Stack.Screen name="hosting" options={{ title: 'Hosting' }} />
         <Stack.Screen name="fields/index" options={{ title: 'Fields' }} />
         <Stack.Screen name="fields/[id]" options={{ title: 'Field' }} />
         <Stack.Screen name="day/[id]" options={{ headerShown: false }} />
