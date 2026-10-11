@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>Airsoft · Game Day walkthrough</title>
+  <link rel="stylesheet" href="walkthrough.css">
+  <script defer src="walkthrough-model.js"></script>
+  <script defer src="walkthrough-ui.js"></script>
+</head>
+<body>
+  <header class="workbench-header"><div><span class="eyebrow">AIRSOFT / EXPERIENCE REVIEW</span><h1>One day. Both sides.</h1><p>A connected walkthrough to try, question and refine.</p></div><span class="prototype-label">LOCAL PROTOTYPE · SIMULATED DATA</span></header>
+  <div class="workbench">
+    <aside class="testing" aria-label="Walkthrough controls">
+      <h2>Take a run through</h2><p class="muted">Start as the host, then switch to Ghost. Both views share this example day.</p>
+      <div class="view-switch" role="group" aria-label="Test viewpoint"><button id="host-view" aria-pressed="true">Host · Ranger</button><button id="player-view" aria-pressed="false">Player · Ghost</button></div>
+      <label>Starting scenario<select id="scenario"><option value="fresh">Start from scratch</option><option value="ready">Ready day · setup complete</option><option value="live">Live round</option><option value="late">Late arrival · waiting</option><option value="review">Ended round · pending review</option></select></label>
+      <button id="load-scenario" class="wide">Load / reset scenario</button>
+      <details open><summary>Simulate conditions</summary>
+        <label class="toggle"><input id="online" type="checkbox" checked> Ghost connected</label>
+        <label class="toggle"><input id="auto-clock" type="checkbox" checked> Run the simulated clock</label>
+        <button id="advance" class="wide">Advance clock by 30 seconds</button>
+        <label class="toggle"><input id="full-team" type="checkbox"> Blue team at capacity</label>
+        <label class="toggle"><input id="changed-life" type="checkbox"> Scanned enemy now on a new life</label>
+        <p class="small">These controls belong to the test, not the app. No real NFC, GPS, accounts or messages.</p>
+      </details>
+      <details><summary>Suggested test</summary><ol><li>Create a day, review its field and save a game.</li><li>Switch to Ghost; join with PINE24 and finish setup.</li><li>Switch to Ranger and start. Advance the countdown.</li><li>As Ghost, report a hit on Map. Try a refused scan, then switch to Patch’s helper simulation.</li><li>Pause as Ranger. Check that treatment and timers freeze.</li><li>Resume, treat, disconnect and try a tag capture.</li><li>End as Ranger, reconnect Ghost and review the pending capture.</li><li>Prepare the next round. Check Ghost’s assignment is retained.</li></ol></details>
+      <details open><summary>Leave feedback</summary><p class="small">Describe what felt unclear or took too many taps. Notes are kept on this browser when storage is available. Export before closing.</p><label>Your feedback<textarea id="feedback" placeholder="I expected… / This felt…"></textarea></label><button id="save-feedback" class="wide">Save note for this screen</button><button id="export-feedback" class="wide">Export feedback</button><div id="notes-status" role="status" class="small"></div></details>
+      <details><summary>Saved feedback</summary><div id="saved-notes" class="small"></div></details>
+      <details><summary>Recent simulated changes</summary><ul id="event-log" class="small"></ul></details>
+    </aside>
+    <section class="preview" aria-label="App preview"><div class="preview-caption"><span id="view-caption">Ranger · hosting</span><span id="phase-caption">No day yet</span></div><div class="phone"><div class="device-status"><span>9:41</span><span>●●● ▰</span></div><div id="app"></div><div class="home-indicator"></div></div><p class="preview-footnote">Illustrated map and example people. Alerts stay inside this preview.</p></section>
+    <aside class="review-notes"><span class="eyebrow">WHAT TO LOOK FOR</span><h2>Clear at a glance.<br>Detail on demand.</h2><p>At each step, can you tell what is happening, what you can do and what happens next?</p><div class="review-card"><h3>Player</h3><p>Can I join easily? Am I in play? Who helps me? Did my action succeed?</p></div><div class="review-card"><h3>Host</h3><p>What blocks the start? Who is waiting? What will this change do to players?</p></div><div class="review-card"><h3>When things go wrong</h3><p>Is the status honest? Is there a clear way forward without repeating setup?</p></div><p class="small">Review panels and scenarios are proposed presentation choices. Pending-action conflict rules, field editing after start and real device behaviour remain implementation work.</p></aside>
+  </div>
+</body>
+</html>

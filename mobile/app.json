@@ -1,0 +1,39 @@
+{
+  "expo": {
+    "name": "Airsoft Tracker",
+    "slug": "airsoft-tracker",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "nz.fraser.airsofttracker"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0B100C",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "nz.fraser.airsofttracker"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "output": "single"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Your location is shared with your team during Game Days."
+        }
+      ]
+    ],
+    "scheme": "airsofttracker",
+    "backgroundColor": "#0B100C"
+  }
+}
