@@ -2,7 +2,17 @@
 // Every gameplay/membership change goes through these; screens never write tables.
 import { supabase } from './supabase';
 import type { FieldData } from './field';
+import type { GameMode, KothSettings } from './game';
 import type { DayRole, OpenDay } from './types';
+
+/** What a game or saved setup is: name, length, countdown, mode and its settings. */
+export interface GameConfig {
+  name: string;
+  length_seconds: number | null;
+  countdown_seconds: number;
+  mode: GameMode;
+  settings: Partial<KothSettings>;
+}
 
 const MESSAGES: Record<string, string> = {
   not_authenticated: 'Please sign in again.',
@@ -40,6 +50,10 @@ const MESSAGES: Record<string, string> = {
   game_unlimited: 'Unlimited games can’t have time added.',
   field_required: 'Pick a field for the day before starting.',
   invalid_time: 'Check the time and try again.',
+  game_settings_invalid: 'Check the game settings and try again.',
+  koth_no_space: 'The hill doesn’t fit on this field clear of No-go and Danger areas. Try a smaller hill.',
+  setup_not_found: 'That saved setup no longer exists.',
+  too_many_setups: 'You have 50 saved setups. Delete one first.',
 };
 
 export class ApiError extends Error {
@@ -114,20 +128,34 @@ export const api = {
     rpc('archive_field', { p_field: field, p_archived: archived }),
   selectDayField: (day: string, field: string) => rpc('select_day_field', { p_day: day, p_field: field }),
   // Games
-  createGame: (day: string, name: string, lengthSeconds: number | null, countdownSeconds: number) =>
+  createGame: (day: string, c: GameConfig) =>
     rpc<string>('create_game', {
       p_day: day,
-      p_name: name,
-      p_length_seconds: lengthSeconds,
-      p_countdown_seconds: countdownSeconds,
+      p_name: c.name,
+      p_length_seconds: c.length_seconds,
+      p_countdown_seconds: c.countdown_seconds,
+      p_mode: c.mode,
+      p_settings: c.settings,
     }),
-  updateGame: (game: string, name: string, lengthSeconds: number | null, countdownSeconds: number) =>
+  updateGame: (game: string, c: GameConfig) =>
     rpc('update_game', {
       p_game: game,
-      p_name: name,
-      p_length_seconds: lengthSeconds,
-      p_countdown_seconds: countdownSeconds,
+      p_name: c.name,
+      p_length_seconds: c.length_seconds,
+      p_countdown_seconds: c.countdown_seconds,
+      p_mode: c.mode,
+      p_settings: c.settings,
     }),
+  saveGameSetup: (setup: string | null, c: GameConfig) =>
+    rpc<string>('save_game_setup', {
+      p_setup: setup,
+      p_name: c.name,
+      p_mode: c.mode,
+      p_length_seconds: c.length_seconds,
+      p_countdown_seconds: c.countdown_seconds,
+      p_settings: c.settings,
+    }),
+  deleteGameSetup: (setup: string) => rpc('delete_game_setup', { p_setup: setup }),
   startGame: (game: string) => rpc('start_game', { p_game: game }),
   forceStart: (game: string) => rpc('force_start', { p_game: game }),
   cancelCountdown: (game: string) => rpc('cancel_countdown', { p_game: game }),

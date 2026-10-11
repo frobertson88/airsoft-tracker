@@ -5,10 +5,10 @@ import * as Location from 'expo-location';
 import { router } from 'expo-router';
 import { useMemo, useRef } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import { FieldMap, type FieldMapHandle, type MapPlayer } from '../../../components/FieldMap';
+import { FieldMap, type FieldMapHandle, type MapHill, type MapPlayer } from '../../../components/FieldMap';
 import { Body, Button, Screen } from '../../../components/ui';
 import { useDay } from '../../../lib/day';
-import { useServerNow } from '../../../lib/game';
+import { clockFor, kothSettings, useServerNow } from '../../../lib/game';
 import { ageLabel, HIDDEN_MS, STALE_MS, usePositions } from '../../../lib/positions';
 import { TRACKING_LABEL, useTracking } from '../../../lib/tracking';
 import { colours, fonts, radius, space, teamColour } from '../../../theme';
@@ -45,6 +45,21 @@ export default function MapTab() {
     return out;
   }, [data, positions, now, me, callsign, teamById, sectionById]);
 
+  // The King of the Hill circle while that game is on (not once it has finished).
+  const hill = useMemo<MapHill | null>(() => {
+    const game = data?.game;
+    const k = data?.koth;
+    if (!game || !k || k.game_id !== game.id || clockFor(game, now).state === 'complete') return null;
+    const holder = teamById(k.holder_team_id);
+    return {
+      lat: k.hill_lat,
+      lng: k.hill_lng,
+      radius: kothSettings(game).radius,
+      colour: k.control === 'held' && holder ? teamColour(holder.colour) : k.control === 'contested' ? colours.danger : colours.text,
+      label: k.control === 'held' && holder ? `Hill · ${holder.name}` : k.control === 'contested' ? 'Hill · contested' : 'Hill',
+    };
+  }, [data, now, teamById]);
+
   if (!data) return null;
 
   const field = data.field;
@@ -69,7 +84,7 @@ export default function MapTab() {
 
   return (
     <View style={styles.screen}>
-      <FieldMap ref={mapRef} data={field.data} players={players} showsUserLocation={Platform.OS !== 'web'} />
+      <FieldMap ref={mapRef} data={field.data} players={players} hill={hill} showsUserLocation={Platform.OS !== 'web'} />
       <View style={styles.banner} pointerEvents="none">
         <Text style={styles.fieldName}>{field.name}</Text>
         <View style={styles.legend}>
@@ -85,6 +100,16 @@ export default function MapTab() {
         </Pressable>
       )}
       <View style={styles.fabs}>
+        {hill && (
+          <Pressable
+            onPress={() => mapRef.current?.goTo({ lat: hill.lat, lng: hill.lng, latDelta: 0.003, lngDelta: 0.003 })}
+            accessibilityRole="button"
+            accessibilityLabel="Go to the hill"
+            style={styles.fab}
+          >
+            <Ionicons name="flag" size={22} color={hill.colour} />
+          </Pressable>
+        )}
         <Pressable onPress={() => mapRef.current?.fit()} accessibilityRole="button" accessibilityLabel="Show whole field" style={styles.fab}>
           <Ionicons name="scan-outline" size={22} color={colours.text} />
         </Pressable>

@@ -5,10 +5,29 @@ import { useEffect, useState } from 'react';
 
 export type GameState = 'ready' | 'countdown' | 'live' | 'paused' | 'resuming' | 'complete';
 
+export type GameMode = 'free' | 'koth';
+
+export const MODE_LABEL: Record<GameMode, string> = {
+  free: 'Free play',
+  koth: 'King of the Hill',
+};
+
+/** KOTH settings as stored (supabase/migrations/0005_koth.sql fills defaults). */
+export interface KothSettings {
+  radius: number;
+  scoring: boolean;
+  rate: number;
+  relocate_minutes: number | null;
+}
+
+export const KOTH_DEFAULTS: KothSettings = { radius: 25, scoring: true, rate: 1, relocate_minutes: null };
+
 export interface Game {
   id: string;
   game_day_id: string;
   name: string;
+  mode: GameMode;
+  settings: Partial<KothSettings>;
   length_seconds: number | null;
   countdown_seconds: number;
   extra_seconds: number;
@@ -78,7 +97,7 @@ export function formatClock(seconds: number) {
   return `${h ? `${h}:` : ''}${mm}:${String(sec).padStart(2, '0')}`;
 }
 
-export function formatLength(g: Pick<Game, 'length_seconds' | 'countdown_seconds'>) {
+export function formatLength(g: Pick<Game, 'length_seconds' | 'countdown_seconds'>): string {
   const length = g.length_seconds === null ? 'Unlimited' : `${Math.round(g.length_seconds / 60)} min`;
   const cd = g.countdown_seconds
     ? g.countdown_seconds >= 60
@@ -103,4 +122,50 @@ export function useServerNow(everyMs = 1000) {
     return () => clearInterval(t);
   }, [everyMs]);
   return now;
+}
+
+/** The hill and who holds it (one row per started KOTH game). */
+export interface KothState {
+  game_id: string;
+  hill_lat: number;
+  hill_lng: number;
+  hill_number: number;
+  placed_active: number | string;
+  last_active: number | string;
+  control: 'empty' | 'held' | 'contested';
+  holder_team_id: string | null;
+  counts: Record<string, number>;
+  scores: Record<string, number | string>;
+  unknown: number;
+  result: 'win' | 'draw' | 'none' | null;
+  winner_team_id: string | null;
+}
+
+export function kothSettings(g: Game): KothSettings {
+  return { ...KOTH_DEFAULTS, ...g.settings };
+}
+
+/** Scores now: stored scores plus what the holder has earned since they were stored. */
+export function kothScores(k: KothState, g: Game, elapsed: number): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const [team, pts] of Object.entries(k.scores)) out[team] = Number(pts);
+  const s = kothSettings(g);
+  if (!k.result && s.scoring && k.control === 'held' && k.holder_team_id) {
+    const extra = Math.max(0, elapsed - Number(k.last_active)) * s.rate;
+    out[k.holder_team_id] = (out[k.holder_team_id] ?? 0) + extra;
+  }
+  return out;
+}
+
+export function describeSettings(mode: GameMode, s: Partial<KothSettings>) {
+  if (mode !== 'koth') return MODE_LABEL.free;
+  const k = { ...KOTH_DEFAULTS, ...s };
+  return [
+    MODE_LABEL.koth,
+    `${k.radius} m hill`,
+    k.relocate_minutes ? `moves every ${k.relocate_minutes} min` : 'fixed hill',
+    k.scoring ? null : 'no scoring',
+  ]
+    .filter(Boolean)
+    .join(' · ');
 }

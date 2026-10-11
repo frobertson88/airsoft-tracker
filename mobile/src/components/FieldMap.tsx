@@ -3,7 +3,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { forwardRef, useImperativeHandle, useRef } from 'react';
 import { StyleSheet, Text, View, type ViewStyle } from 'react-native';
-import MapView, { Marker, Polygon, Polyline, type Region } from 'react-native-maps';
+import MapView, { Circle, Marker, Polygon, Polyline, type Region } from 'react-native-maps';
 import {
   AREA_LABELS,
   centroid,
@@ -32,9 +32,19 @@ export interface MapPlayer {
   stale?: string;
 }
 
+/** The King of the Hill circle. */
+export interface MapHill {
+  lat: number;
+  lng: number;
+  radius: number;
+  colour: string;
+  label: string;
+}
+
 export interface FieldMapProps {
   data: FieldData;
   players?: MapPlayer[];
+  hill?: MapHill | null;
   /** A shape being drawn in the editor. */
   draft?: { kind: 'boundary' | AreaKind; points: Coord[] } | null;
   onPress?: (c: Coord) => void;
@@ -63,7 +73,7 @@ const DRAFT_STROKE: Record<'boundary' | AreaKind, string> = {
 };
 
 export const FieldMap = forwardRef<FieldMapHandle, FieldMapProps>(function FieldMap(
-  { data, players, draft, onPress, onViewChange, showsUserLocation, style },
+  { data, players, hill, draft, onPress, onViewChange, showsUserLocation, style },
   ref,
 ) {
   const map = useRef<MapView>(null);
@@ -145,6 +155,33 @@ export const FieldMap = forwardRef<FieldMapHandle, FieldMapProps>(function Field
         );
       })}
 
+      {hill && (
+        <>
+          <Circle
+            center={toLatLng(hill)}
+            radius={hill.radius}
+            strokeColor={hill.colour}
+            strokeWidth={3}
+            fillColor="rgba(215,225,209,0.15)"
+            zIndex={5}
+          />
+          <Marker
+            key={`hill-${hill.lat}-${hill.lng}-${hill.label}-${hill.colour}`}
+            coordinate={toLatLng(hill)}
+            anchor={{ x: 0.5, y: 0.5 }}
+            tracksViewChanges={false}
+            zIndex={6}
+          >
+            <View style={[styles.hillLabel, { borderColor: hill.colour }]}>
+              <Ionicons name="flag" size={12} color={hill.colour} />
+              <Text style={styles.hillText} numberOfLines={1}>
+                {hill.label}
+              </Text>
+            </View>
+          </Marker>
+        </>
+      )}
+
       {players?.map((p) => (
         <Marker
           // The key changes with the look so Android redraws the marker.
@@ -217,6 +254,18 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     marginTop: 2,
   },
+  hillLabel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(11,16,12,0.85)',
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: space.sm,
+    paddingVertical: 2,
+    maxWidth: 180,
+  },
+  hillText: { color: colours.text, fontFamily: fonts.display, fontSize: 13, textTransform: 'uppercase' },
   player: { alignItems: 'center', maxWidth: 180 },
   playerStale: { opacity: 0.7 },
   playerDot: { width: 18, height: 18, borderRadius: 9, borderWidth: 3, borderColor: '#ffffff' },

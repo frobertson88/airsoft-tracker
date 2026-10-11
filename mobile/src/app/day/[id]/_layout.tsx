@@ -48,6 +48,17 @@ function GameWatcher() {
     }
   }, [game, projected]);
 
+  // King of the Hill: buzz when the hill moves or changes hands.
+  const koth = data?.koth ?? null;
+  const lastHill = useRef('');
+  useEffect(() => {
+    if (!koth || koth.result) return;
+    const key = `${koth.game_id}:${koth.hill_number}:${koth.control}:${koth.holder_team_id ?? ''}`;
+    const prev = lastHill.current;
+    lastHill.current = key;
+    if (prev && prev !== key && prev.startsWith(koth.game_id)) Vibration.vibrate([0, 150, 100, 150]);
+  }, [koth]);
+
   return null;
 }
 

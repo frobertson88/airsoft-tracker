@@ -15,7 +15,7 @@ import { friendlyError } from './api';
 import { useAuth } from './auth';
 import { supabase } from './supabase';
 import type { DayField } from './field';
-import { setServerOffset, type Game } from './game';
+import { setServerOffset, type Game, type KothState } from './game';
 import type { DayMember, GameDay, Section, Team } from './types';
 
 export interface DayData {
@@ -28,6 +28,8 @@ export interface DayData {
   field: DayField | null;
   /** The latest game (unfinished, or the one that just ended), or null. */
   game: Game | null;
+  /** The hill for a started King of the Hill game, else null. */
+  koth: KothState | null;
 }
 
 interface DayState {
@@ -59,6 +61,12 @@ async function fetchDay(id: string): Promise<DayData> {
   const err = day.error ?? teams.error ?? sections.error ?? members.error;
   if (err) throw new Error(err.message);
 
+  const latest = (game.data ?? null) as Game | null;
+  const koth =
+    latest?.mode === 'koth'
+      ? await supabase.from('koth_state').select('*').eq('game_id', latest.id).maybeSingle()
+      : { data: null };
+
   const ids = (members.data ?? []).map((m) => m.user_id);
   const profiles = ids.length
     ? await supabase.from('profiles').select('id, callsign').in('id', ids)
@@ -73,7 +81,8 @@ async function fetchDay(id: string): Promise<DayData> {
     members: (members.data ?? []) as DayMember[],
     callsigns,
     field: (field.data ?? null) as DayField | null,
-    game: (game.data ?? null) as Game | null,
+    game: latest,
+    koth: (koth.data ?? null) as KothState | null,
   };
 }
 
@@ -115,6 +124,7 @@ export function DayProvider({ id, children }: { id: string; children: ReactNode 
       .on('postgres_changes', { event: '*', schema: 'public', table: 'sections', filter }, scheduleReload)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'day_fields', filter }, scheduleReload)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'games', filter }, scheduleReload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'koth_state', filter }, scheduleReload)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'game_days', filter: `id=eq.${id}` }, scheduleReload)
       .subscribe();
     const appState = AppState.addEventListener('change', (s) => {

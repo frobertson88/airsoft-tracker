@@ -1,10 +1,21 @@
 // Host tab game controls: set up a game, then run it through countdown, live,
 // pause and end (plans/current.md, Stage 3).
-import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
-import { api } from '../lib/api';
+import { useCallback, useEffect, useState } from 'react';
+import { StyleSheet, Switch, Text, View } from 'react-native';
+import { api, type GameConfig } from '../lib/api';
 import { useCommand, useDay } from '../lib/day';
-import { clockFor, formatLength, useServerNow, type Game } from '../lib/game';
+import {
+  clockFor,
+  describeSettings,
+  formatLength,
+  KOTH_DEFAULTS,
+  MODE_LABEL,
+  useServerNow,
+  type Game,
+  type GameMode,
+  type KothSettings,
+} from '../lib/game';
+import { supabase } from '../lib/supabase';
 import { colours, fonts, space } from '../theme';
 import { GameClock } from './GameClock';
 import { Body, Button, Card, Chip, ConfirmButton, ErrorText, Field, Label, Row } from './ui';
@@ -27,41 +38,189 @@ const COUNTDOWNS = [
   { label: '5 min', seconds: 300 },
 ];
 
+const HILL_SIZES = [15, 25, 40, 60];
+const MOVES: { label: string; minutes: number | null }[] = [
+  { label: 'Fixed', minutes: null },
+  { label: 'Every 5 min', minutes: 5 },
+  { label: 'Every 10 min', minutes: 10 },
+  { label: 'Every 15 min', minutes: 15 },
+];
+
+const DEFAULT_CONFIG: GameConfig = {
+  name: 'Skirmish',
+  length_seconds: 1200,
+  countdown_seconds: 30,
+  mode: 'free',
+  settings: {},
+};
+
+const configOf = (g: Pick<Game, 'name' | 'length_seconds' | 'countdown_seconds' | 'mode' | 'settings'>): GameConfig => ({
+  name: g.name,
+  length_seconds: g.length_seconds,
+  countdown_seconds: g.countdown_seconds,
+  mode: g.mode,
+  settings: g.settings,
+});
+
+interface SavedSetup extends GameConfig {
+  id: string;
+}
+
+function useSavedSetups() {
+  const [setups, setSetups] = useState<SavedSetup[]>([]);
+  const load = useCallback(() => {
+    supabase
+      .from('game_setups')
+      .select('id, name, mode, length_seconds, countdown_seconds, settings')
+      .order('name')
+      .then(({ data }) => setSetups((data ?? []) as SavedSetup[]));
+  }, []);
+  useEffect(load, [load]);
+  return { setups, reload: load };
+}
+
 function GameSetup({ game, onDone }: { game: Game | null; onDone?: () => void }) {
   const { id } = useDay();
   const { run, busy, error, setError } = useCommand();
-  const [name, setName] = useState(game?.name ?? 'Skirmish');
-  const [length, setLength] = useState<number | null>(game ? game.length_seconds : 1200);
-  const [countdown, setCountdown] = useState(game?.countdown_seconds ?? 30);
+  const saved = useSavedSetups();
   const editing = game?.state === 'ready';
+  const [c, setC] = useState<GameConfig>(() =>
+    game ? configOf(game) : { ...DEFAULT_CONFIG },
+  );
+  const [setupId, setSetupId] = useState<string | null>(null);
+  const [note, setNote] = useState('');
+  const koth = { ...KOTH_DEFAULTS, ...c.settings };
+  const set = (patch: Partial<GameConfig>) => {
+    setNote('');
+    setC((prev) => ({ ...prev, ...patch }));
+  };
+  const setKoth = (patch: Partial<KothSettings>) => set({ settings: { ...koth, ...patch } });
 
   const save = async () => {
-    if (!name.trim()) return setError('Give the game a name.');
-    const ok = await run(() =>
-      editing
-        ? api.updateGame(game.id, name.trim(), length, countdown)
-        : api.createGame(id, name.trim(), length, countdown),
-    );
+    if (!c.name.trim()) return setError('Give the game a name.');
+    const config = { ...c, name: c.name.trim() };
+    const ok = await run(() => (editing ? api.updateGame(game.id, config) : api.createGame(id, config)));
     if (ok) onDone?.();
+  };
+
+  const saveSetup = async () => {
+    if (!c.name.trim()) return setError('Give the game a name.');
+    // Saving under the name of a setup you picked updates it; a new name makes a new one.
+    const same = saved.setups.find((x) => x.id === setupId && x.name === c.name.trim());
+    let newId: string | null = null;
+    const ok = await run(async () => {
+      newId = await api.saveGameSetup(same ? same.id : null, { ...c, name: c.name.trim() });
+    });
+    if (ok) {
+      setSetupId(newId);
+      setNote(same ? 'Setup updated.' : 'Saved to your setups.');
+      saved.reload();
+    }
+  };
+
+  const deleteSetup = async (sid: string) => {
+    if (await run(() => api.deleteGameSetup(sid))) {
+      setSetupId(null);
+      setNote('Setup deleted.');
+      saved.reload();
+    }
   };
 
   return (
     <Card style={{ gap: space.md }}>
-      <Field value={name} onChangeText={setName} placeholder="Game name" maxLength={40} />
+      {saved.setups.length > 0 && (
+        <>
+          <Text style={styles.small}>Your setups</Text>
+          <Row style={styles.wrap}>
+            {saved.setups.map((x) => (
+              <Chip
+                key={x.id}
+                label={x.name}
+                selected={setupId === x.id}
+                onPress={() => {
+                  setSetupId(x.id);
+                  set(configOf(x));
+                }}
+              />
+            ))}
+          </Row>
+        </>
+      )}
+
+      <Field value={c.name} onChangeText={(name) => set({ name })} placeholder="Game name" maxLength={40} />
+
+      <Text style={styles.small}>Game type</Text>
+      <Row style={styles.wrap}>
+        {(['free', 'koth'] as GameMode[]).map((m) => (
+          <Chip
+            key={m}
+            label={MODE_LABEL[m]}
+            selected={c.mode === m}
+            onPress={() => set({ mode: m, settings: m === 'koth' ? { ...KOTH_DEFAULTS } : {} })}
+          />
+        ))}
+      </Row>
+      {c.mode === 'koth' && (
+        <Text style={styles.help}>
+          A hill appears at a random spot on the field. The team with the most players inside holds it and scores
+          points. Equal numbers mean contested and nobody scores.
+        </Text>
+      )}
+
       <Text style={styles.small}>Length</Text>
       <Row style={styles.wrap}>
         {LENGTHS.map((l) => (
-          <Chip key={l.label} label={l.label} selected={length === l.seconds} onPress={() => setLength(l.seconds)} />
+          <Chip key={l.label} label={l.label} selected={c.length_seconds === l.seconds} onPress={() => set({ length_seconds: l.seconds })} />
         ))}
       </Row>
       <Text style={styles.small}>Start countdown</Text>
       <Row style={styles.wrap}>
-        {COUNTDOWNS.map((c) => (
-          <Chip key={c.label} label={c.label} selected={countdown === c.seconds} onPress={() => setCountdown(c.seconds)} />
+        {COUNTDOWNS.map((x) => (
+          <Chip key={x.label} label={x.label} selected={c.countdown_seconds === x.seconds} onPress={() => set({ countdown_seconds: x.seconds })} />
         ))}
       </Row>
+
+      {c.mode === 'koth' && (
+        <>
+          <Text style={styles.small}>Hill size (radius)</Text>
+          <Row style={styles.wrap}>
+            {HILL_SIZES.map((r) => (
+              <Chip key={r} label={`${r} m`} selected={koth.radius === r} onPress={() => setKoth({ radius: r })} />
+            ))}
+          </Row>
+          <Text style={styles.small}>Hill moves</Text>
+          <Row style={styles.wrap}>
+            {MOVES.map((m) => (
+              <Chip
+                key={m.label}
+                label={m.label}
+                selected={koth.relocate_minutes === m.minutes}
+                onPress={() => setKoth({ relocate_minutes: m.minutes })}
+              />
+            ))}
+          </Row>
+          <View style={styles.between}>
+            <View style={{ flexShrink: 1 }}>
+              <Text style={styles.label}>Scoring</Text>
+              <Text style={styles.help}>1 point per second for the team holding the hill. Highest score wins.</Text>
+            </View>
+            <Switch
+              value={koth.scoring}
+              onValueChange={(scoring) => setKoth({ scoring })}
+              trackColor={{ true: colours.actionFill, false: colours.border }}
+              thumbColor={koth.scoring ? colours.accent : colours.textSecondary}
+            />
+          </View>
+        </>
+      )}
+
       <Button title={editing ? 'Save settings' : 'Set up game'} busy={busy} onPress={save} />
+      <Button title="Save to your setups" variant="secondary" busy={busy} onPress={saveSetup} />
+      {setupId && (
+        <ConfirmButton title="Delete this saved setup" confirmTitle="Tap again to delete" busy={busy} onConfirm={() => deleteSetup(setupId)} />
+      )}
       {editing && <Button title="Cancel" variant="quiet" onPress={() => onDone?.()} />}
+      {!!note && <Body muted>{note}</Body>}
       <ErrorText>{error}</ErrorText>
     </Card>
   );
@@ -151,6 +310,7 @@ export function GameControls() {
         )}
         {state === 'complete' && (
           <>
+            <Body muted>{describeSettings(game.mode, game.settings)}</Body>
             <Button title={`Play again · ${formatLength(game)}`} busy={busy} onPress={() => run(() => api.playAgain(g))} />
             <Button title="Set up a new game" variant="secondary" onPress={() => setNewGame(true)} />
           </>
@@ -165,4 +325,7 @@ const styles = StyleSheet.create({
   small: { color: colours.textSecondary, fontFamily: fonts.medium, fontSize: 14 },
   wrap: { flexWrap: 'wrap', gap: space.sm },
   actions: { gap: space.sm },
+  help: { color: colours.textSecondary, fontFamily: fonts.regular, fontSize: 13 },
+  label: { color: colours.text, fontFamily: fonts.medium, fontSize: 16 },
+  between: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.md },
 });
