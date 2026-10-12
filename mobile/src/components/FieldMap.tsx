@@ -48,6 +48,7 @@ export interface FieldMapProps {
   /** A shape being drawn in the editor. */
   draft?: { kind: 'boundary' | AreaKind; points: Coord[] } | null;
   onPress?: (c: Coord) => void;
+  onLongPress?: (c: Coord) => void;
   onViewChange?: (v: FieldView) => void;
   showsUserLocation?: boolean;
   style?: ViewStyle;
@@ -73,7 +74,7 @@ const DRAFT_STROKE: Record<'boundary' | AreaKind, string> = {
 };
 
 export const FieldMap = forwardRef<FieldMapHandle, FieldMapProps>(function FieldMap(
-  { data, players, hill, draft, onPress, onViewChange, showsUserLocation, style },
+  { data, players, hill, draft, onPress, onLongPress, onViewChange, showsUserLocation, style },
   ref,
 ) {
   const map = useRef<MapView>(null);
@@ -98,6 +99,11 @@ export const FieldMap = forwardRef<FieldMapHandle, FieldMapProps>(function Field
       rotateEnabled={false}
       toolbarEnabled={false}
       onPress={onPress ? (e) => onPress({ lat: e.nativeEvent.coordinate.latitude, lng: e.nativeEvent.coordinate.longitude }) : undefined}
+      onLongPress={
+        onLongPress
+          ? (e) => onLongPress({ lat: e.nativeEvent.coordinate.latitude, lng: e.nativeEvent.coordinate.longitude })
+          : undefined
+      }
       onRegionChangeComplete={
         onViewChange
           ? (r) => onViewChange({ lat: r.latitude, lng: r.longitude, latDelta: r.latitudeDelta, lngDelta: r.longitudeDelta })

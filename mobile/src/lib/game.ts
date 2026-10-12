@@ -14,6 +14,8 @@ export const MODE_LABEL: Record<GameMode, string> = {
 
 /** KOTH settings as stored (supabase/migrations/0005_koth.sql fills defaults). */
 export interface KothSettings {
+  /** Any mode: teams in use, 2–4. */
+  team_count?: number;
   radius: number;
   scoring: boolean;
   rate: number;
@@ -158,10 +160,12 @@ export function kothScores(k: KothState, g: Game, elapsed: number): Record<strin
 }
 
 export function describeSettings(mode: GameMode, s: Partial<KothSettings>) {
-  if (mode !== 'koth') return MODE_LABEL.free;
+  const teams = `${s.team_count ?? 2} teams`;
+  if (mode !== 'koth') return `${MODE_LABEL.free} · ${teams}`;
   const k = { ...KOTH_DEFAULTS, ...s };
   return [
     MODE_LABEL.koth,
+    teams,
     `${k.radius} m hill`,
     k.relocate_minutes ? `moves every ${k.relocate_minutes} min` : 'fixed hill',
     k.scoring ? null : 'no scoring',

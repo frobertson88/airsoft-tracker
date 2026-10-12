@@ -5,6 +5,9 @@ import type { FieldData } from './field';
 import type { GameMode, KothSettings } from './game';
 import type { DayRole, OpenDay } from './types';
 
+/** How arrange_teams fills teams: keep players, deal them out at random, or everyone picks again. */
+export type TeamFill = 'keep' | 'shuffle' | 'clear';
+
 /** What a game or saved setup is: name, length, countdown, mode and its settings. */
 export interface GameConfig {
   name: string;
@@ -52,6 +55,13 @@ const MESSAGES: Record<string, string> = {
   invalid_time: 'Check the time and try again.',
   game_settings_invalid: 'Check the game settings and try again.',
   koth_no_space: 'The hill doesn’t fit on this field clear of No-go and Danger areas. Try a smaller hill.',
+  team_count_invalid: 'Pick 2, 3 or 4 teams.',
+  team_fill_invalid: 'Choose how to fill the teams.',
+  game_running: 'Finish the current game before changing teams.',
+  team_locked: 'Teams are locked while a game is running. Ask an admin to move you.',
+  not_koth: 'Only King of the Hill games have a hill.',
+  game_not_running: 'The game isn’t running.',
+  hill_spot_invalid: 'The hill must fit inside the boundary, clear of No-go and Danger areas. Pick another spot.',
   setup_not_found: 'That saved setup no longer exists.',
   too_many_setups: 'You have 50 saved setups. Delete one first.',
 };
@@ -156,6 +166,11 @@ export const api = {
       p_settings: c.settings,
     }),
   deleteGameSetup: (setup: string) => rpc('delete_game_setup', { p_setup: setup }),
+  arrangeTeams: (day: string, count: number, fill: TeamFill) =>
+    rpc('arrange_teams', { p_day: day, p_count: count, p_fill: fill }),
+  /** Move the KOTH hill; no spot means a new random one. */
+  moveHill: (game: string, spot?: { lat: number; lng: number }) =>
+    rpc('move_hill', { p_game: game, p_lat: spot?.lat ?? null, p_lng: spot?.lng ?? null }),
   startGame: (game: string) => rpc('start_game', { p_game: game }),
   forceStart: (game: string) => rpc('force_start', { p_game: game }),
   cancelCountdown: (game: string) => rpc('cancel_countdown', { p_game: game }),

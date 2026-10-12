@@ -2,7 +2,7 @@
 // pause and end (plans/current.md, Stage 3).
 import { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, Switch, Text, View } from 'react-native';
-import { api, type GameConfig } from '../lib/api';
+import { api, type GameConfig, type TeamFill } from '../lib/api';
 import { useCommand, useDay } from '../lib/day';
 import {
   clockFor,
@@ -46,6 +46,12 @@ const MOVES: { label: string; minutes: number | null }[] = [
   { label: 'Every 15 min', minutes: 15 },
 ];
 
+const FILLS: { fill: TeamFill; label: string; help: string }[] = [
+  { fill: 'keep', label: 'Keep teams', help: 'Players stay on their teams. Anyone on a team that’s no longer used picks again.' },
+  { fill: 'shuffle', label: 'Shuffle', help: 'Everyone playing is put on random, even teams. Sections reset.' },
+  { fill: 'clear', label: 'Everyone picks', help: 'Everyone chooses a team again before the game.' },
+];
+
 const DEFAULT_CONFIG: GameConfig = {
   name: 'Skirmish',
   length_seconds: 1200,
@@ -80,13 +86,18 @@ function useSavedSetups() {
 }
 
 function GameSetup({ game, onDone }: { game: Game | null; onDone?: () => void }) {
-  const { id } = useDay();
+  const { id, data } = useDay();
   const { run, busy, error, setError } = useCommand();
   const saved = useSavedSetups();
+  const currentTeams = data?.day.team_count ?? 2;
   const editing = game?.state === 'ready';
   const [c, setC] = useState<GameConfig>(() =>
     game ? configOf(game) : { ...DEFAULT_CONFIG },
   );
+  const [teamCount, setTeamCount] = useState<number>(game?.settings.team_count ?? currentTeams);
+  // Changing the number of teams shuffles by default (Fraser, 12 October 2026).
+  const [fill, setFill] = useState<TeamFill | null>(null);
+  const fillChoice: TeamFill = fill ?? (teamCount === currentTeams ? 'keep' : 'shuffle');
   const [setupId, setSetupId] = useState<string | null>(null);
   const [note, setNote] = useState('');
   const koth = { ...KOTH_DEFAULTS, ...c.settings };
@@ -98,8 +109,11 @@ function GameSetup({ game, onDone }: { game: Game | null; onDone?: () => void })
 
   const save = async () => {
     if (!c.name.trim()) return setError('Give the game a name.');
-    const config = { ...c, name: c.name.trim() };
-    const ok = await run(() => (editing ? api.updateGame(game.id, config) : api.createGame(id, config)));
+    const config = { ...c, name: c.name.trim(), settings: { ...c.settings, team_count: teamCount } };
+    const ok = await run(async () => {
+      if (teamCount !== currentTeams || fillChoice !== 'keep') await api.arrangeTeams(id, teamCount, fillChoice);
+      await (editing ? api.updateGame(game.id, config) : api.createGame(id, config));
+    });
     if (ok) onDone?.();
   };
 
@@ -109,7 +123,11 @@ function GameSetup({ game, onDone }: { game: Game | null; onDone?: () => void })
     const same = saved.setups.find((x) => x.id === setupId && x.name === c.name.trim());
     let newId: string | null = null;
     const ok = await run(async () => {
-      newId = await api.saveGameSetup(same ? same.id : null, { ...c, name: c.name.trim() });
+      newId = await api.saveGameSetup(same ? same.id : null, {
+        ...c,
+        name: c.name.trim(),
+        settings: { ...c.settings, team_count: teamCount },
+      });
     });
     if (ok) {
       setSetupId(newId);
@@ -140,6 +158,8 @@ function GameSetup({ game, onDone }: { game: Game | null; onDone?: () => void })
                 onPress={() => {
                   setSetupId(x.id);
                   set(configOf(x));
+                  setTeamCount(x.settings.team_count ?? 2);
+                  setFill(null);
                 }}
               />
             ))}
@@ -166,6 +186,33 @@ function GameSetup({ game, onDone }: { game: Game | null; onDone?: () => void })
           points. Equal numbers mean contested and nobody scores.
         </Text>
       )}
+
+      <Text style={styles.small}>Teams</Text>
+      <Row style={styles.wrap}>
+        {[2, 3, 4].map((n) => (
+          <Chip
+            key={n}
+            label={`${n} teams`}
+            selected={teamCount === n}
+            onPress={() => {
+              setTeamCount(n);
+              setFill(null);
+            }}
+          />
+        ))}
+      </Row>
+      <Text style={styles.small}>Players on teams</Text>
+      <Row style={styles.wrap}>
+        {FILLS.map((f) => (
+          <Chip
+            key={f.fill}
+            label={f.label}
+            selected={fillChoice === f.fill}
+            onPress={() => setFill(f.fill)}
+          />
+        ))}
+      </Row>
+      <Text style={styles.help}>{FILLS.find((f) => f.fill === fillChoice)?.help}</Text>
 
       <Text style={styles.small}>Length</Text>
       <Row style={styles.wrap}>
@@ -258,6 +305,9 @@ export function GameControls() {
 
   const g = game.id;
   const timed = game.length_seconds !== null;
+  // Admins without a team may be hosting, so only players are counted.
+  const noTeam = data.members.filter((m) => m.status === 'active' && !m.team_id && !m.is_admin).length;
+  const running = state === 'countdown' || state === 'live' || state === 'paused' || state === 'resuming';
   return (
     <>
       <Label>{state === 'complete' ? 'Last game' : 'Game'}</Label>
@@ -265,6 +315,12 @@ export function GameControls() {
       <View style={styles.actions}>
         {state === 'ready' && (
           <>
+            {noTeam > 0 && (
+              <Body muted>
+                {noTeam} {noTeam === 1 ? 'player has' : 'players have'} no team yet and will sit this game out unless
+                they pick one.
+              </Body>
+            )}
             {data.field ? (
               <Button
                 title={game.countdown_seconds ? 'Start countdown' : 'Start game'}
@@ -288,6 +344,12 @@ export function GameControls() {
         )}
         {state === 'resuming' && (
           <Button title="Cancel resume" variant="secondary" busy={busy} onPress={() => run(() => api.cancelCountdown(g))} />
+        )}
+        {running && game.mode === 'koth' && (
+          <>
+            <Button title="Move hill now" variant="secondary" busy={busy} onPress={() => run(() => api.moveHill(g))} />
+            <Text style={styles.help}>Moves the hill to a new random spot. To pick the spot, press and hold on the Map.</Text>
+          </>
         )}
         {state === 'live' && (
           <Button title="Pause" busy={busy} onPress={() => run(() => api.pauseGame(g))} />

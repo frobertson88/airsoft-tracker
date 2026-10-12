@@ -84,8 +84,9 @@ function KothPanel({ game, clock }: { game: Game; clock: Clock }) {
 
   const scores = kothScores(k, game, clock.elapsed);
   // Teams with players, plus any team that has scored.
-  const teams = data.teams.filter(
-    (t) => data.members.some((m) => m.status === 'active' && m.team_id === t.id) || scores[t.id] !== undefined,
+  const teams = data.allTeams.filter(
+    (t) =>
+      (t.active && data.members.some((m) => m.status === 'active' && m.team_id === t.id)) || scores[t.id] !== undefined,
   );
   const holder = teamById(k.holder_team_id);
   const done = clock.state === 'complete';

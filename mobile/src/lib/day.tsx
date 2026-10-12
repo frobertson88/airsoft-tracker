@@ -20,7 +20,10 @@ import type { DayMember, GameDay, Section, Team } from './types';
 
 export interface DayData {
   day: GameDay;
+  /** Teams in use for the next or current game. */
   teams: Team[];
+  /** Every team the day has had, including ones no longer used (for past results). */
+  allTeams: Team[];
   sections: Section[];
   members: DayMember[];
   callsigns: Record<string, string>;
@@ -76,7 +79,8 @@ async function fetchDay(id: string): Promise<DayData> {
 
   return {
     day: day.data as GameDay,
-    teams: (teams.data ?? []) as Team[],
+    teams: ((teams.data ?? []) as Team[]).filter((t) => t.active !== false),
+    allTeams: (teams.data ?? []) as Team[],
     sections: (sections.data ?? []) as Section[],
     members: (members.data ?? []) as DayMember[],
     callsigns,
@@ -150,7 +154,7 @@ export function DayProvider({ id, children }: { id: string; children: ReactNode 
       adminMode: isAdmin,
       reload,
       callsign: (userId) => data?.callsigns[userId] ?? 'Player',
-      teamById: (teamId) => data?.teams.find((t) => t.id === teamId),
+      teamById: (teamId) => data?.allTeams.find((t) => t.id === teamId),
       sectionById: (sectionId) => data?.sections.find((s) => s.id === sectionId),
     };
   }, [id, data, error, session, reload]);

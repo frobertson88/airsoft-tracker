@@ -3,10 +3,12 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Location from 'expo-location';
 import { router } from 'expo-router';
-import { useMemo, useRef } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { FieldMap, type FieldMapHandle, type MapHill, type MapPlayer } from '../../../components/FieldMap';
 import { Body, Button, Screen } from '../../../components/ui';
+import { api, friendlyError } from '../../../lib/api';
+import type { Coord } from '../../../lib/field';
 import { useDay } from '../../../lib/day';
 import { clockFor, kothSettings, useServerNow } from '../../../lib/game';
 import { ageLabel, HIDDEN_MS, STALE_MS, usePositions } from '../../../lib/positions';
@@ -17,6 +19,10 @@ export default function MapTab() {
   const { id, data, me, isAdmin, callsign, teamById, sectionById } = useDay();
   const tracking = useTracking();
   const mapRef = useRef<FieldMapHandle>(null);
+  // Admins press and hold to move the King of the Hill hill.
+  const [hillSpot, setHillSpot] = useState<Coord | null>(null);
+  const [moving, setMoving] = useState(false);
+  const [moveError, setMoveError] = useState('');
   // Re-read positions when who's on which team changes.
   const membersKey = data?.members.map((m) => `${m.user_id}:${m.status}:${m.team_id}`).join(',');
   const positions = usePositions(id, membersKey);
@@ -60,6 +66,21 @@ export default function MapTab() {
     };
   }, [data, now, teamById]);
 
+  const canMoveHill = isAdmin && !!hill && !!data?.game;
+  const moveHillHere = async () => {
+    if (!hillSpot || !data?.game) return;
+    setMoving(true);
+    setMoveError('');
+    try {
+      await api.moveHill(data.game.id, hillSpot);
+      setHillSpot(null);
+    } catch (e) {
+      setMoveError(friendlyError(e));
+    } finally {
+      setMoving(false);
+    }
+  };
+
   if (!data) return null;
 
   const field = data.field;
@@ -84,7 +105,17 @@ export default function MapTab() {
 
   return (
     <View style={styles.screen}>
-      <FieldMap ref={mapRef} data={field.data} players={players} hill={hill} showsUserLocation={Platform.OS !== 'web'} />
+      <FieldMap ref={mapRef} data={field.data} players={players}
+        hill={
+          hillSpot && hill
+            ? { ...hill, lat: hillSpot.lat, lng: hillSpot.lng, colour: colours.accent, label: 'Move here?' }
+            : hill
+        }
+        onLongPress={canMoveHill ? (c) => {
+          setMoveError('');
+          setHillSpot(c);
+        } : undefined}
+        showsUserLocation={Platform.OS !== 'web'} />
       <View style={styles.banner} pointerEvents="none">
         <Text style={styles.fieldName}>{field.name}</Text>
         <View style={styles.legend}>
@@ -94,7 +125,21 @@ export default function MapTab() {
           <Text style={styles.legendText}>Danger</Text>
         </View>
       </View>
-      {tracking.status !== 'sharing' && (
+      {hillSpot && (
+        <View style={styles.moveCard}>
+          <Text style={styles.trackingText}>Move the hill here? Players are told it moved.</Text>
+          {!!moveError && <Text style={[styles.trackingText, { color: colours.danger }]}>{moveError}</Text>}
+          <View style={styles.moveRow}>
+            <View style={{ flex: 1 }}>
+              <Button title="Move hill" busy={moving} onPress={moveHillHere} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Button title="Cancel" variant="secondary" onPress={() => setHillSpot(null)} />
+            </View>
+          </View>
+        </View>
+      )}
+      {tracking.status !== 'sharing' && !hillSpot && (
         <Pressable onPress={tracking.retry} style={styles.trackingBar} accessibilityRole="button">
           <Text style={styles.trackingText}>{TRACKING_LABEL[tracking.status]}</Text>
         </Pressable>
@@ -141,6 +186,19 @@ const styles = StyleSheet.create({
   legendText: { color: colours.textSecondary, fontFamily: fonts.regular, fontSize: 12, marginRight: space.xs },
   swatch: { width: 14, height: 14, borderRadius: 3, borderColor: colours.danger, borderWidth: 1 },
   swatchDashed: { borderStyle: 'dashed', borderWidth: 2 },
+  moveCard: {
+    position: 'absolute',
+    left: space.sm,
+    right: space.sm,
+    bottom: space.md,
+    backgroundColor: 'rgba(11,16,12,0.95)',
+    borderColor: colours.accent,
+    borderWidth: 1,
+    borderRadius: radius,
+    padding: space.md,
+    gap: space.sm,
+  },
+  moveRow: { flexDirection: 'row', gap: space.sm },
   trackingBar: {
     position: 'absolute',
     left: space.sm,

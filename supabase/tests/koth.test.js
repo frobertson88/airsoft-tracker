@@ -1,4 +1,4 @@
-// King of the Hill and saved setups (0005) on top of 0001–0004, in PGlite.
+// King of the Hill and saved setups (0005, with 0006) on top of 0001–0004, in PGlite.
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -86,7 +86,7 @@ let day, blue, red, field, tinyField, g1;
 before(async () => {
   db = new PGlite();
   await db.exec(SUPABASE_STUB);
-  for (const f of ['0001_stage1.sql', '0002_section_leads.sql', '0003_fields.sql', '0004_games.sql', '0005_koth.sql']) {
+  for (const f of ['0001_stage1.sql', '0002_section_leads.sql', '0003_fields.sql', '0004_games.sql', '0005_koth.sql', '0006_teams_and_hill.sql']) {
     await db.exec(read(f));
   }
   for (const id of Object.values(U)) await db.query('insert into auth.users values ($1)', [id]);
@@ -107,12 +107,12 @@ test('KOTH settings are validated and filled with defaults', async () => {
   const id = (await as(U.admin, `select create_game($1, 'K', 600, 0, 'koth', '{}') as id`, [day]))[0].id;
   const g = await game(id);
   assert.equal(g.mode, 'koth');
-  assert.deepEqual(g.settings, { radius: 25, scoring: true, rate: 1, relocate_minutes: null });
+  assert.deepEqual(g.settings, { team_count: 2, radius: 25, scoring: true, rate: 1, relocate_minutes: null });
   await as(U.admin, 'select end_game($1)', [id]);
   // Free play ignores settings, and the old 4-argument call still works.
   const f = (await as(U.admin, `select create_game($1, 'F', 600, 0) as id`, [day]))[0].id;
   assert.equal((await game(f)).mode, 'free');
-  assert.deepEqual((await game(f)).settings, {});
+  assert.deepEqual((await game(f)).settings, { team_count: 2 });
   await as(U.admin, 'select end_game($1)', [f]);
 });
 
@@ -252,6 +252,8 @@ test('ending decides the winner; equal scores draw; no scoring means no winner',
   const g2 = (await as(U.admin, 'select play_again($1) as id', [g1]))[0].id;
   assert.equal((await game(g2)).mode, 'koth');
   assert.equal((await game(g2)).settings.relocate_minutes, 5);
+  // Nobody on the field, so no one scores before the end (the random hill could land on them).
+  await db.query('delete from positions');
   await as(U.admin, 'select start_game($1)', [g2]);
   await db.query(`update koth_state set scores = $2 where game_id = $1`, [g2, JSON.stringify({ [blue]: 50, [red]: 50 })]);
   await as(U.admin, 'select end_game($1)', [g2]);

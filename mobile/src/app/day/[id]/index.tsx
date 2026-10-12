@@ -1,14 +1,23 @@
 // Game tab: your assignment, the current game and clock, and your squad (docs/design-direction.md).
+import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { MemberRow } from '../../../components/MemberList';
 import { GameClock } from '../../../components/GameClock';
-import { Body, Card, Display, Label, Screen } from '../../../components/ui';
+import { Body, Button, Card, Display, Label, Screen } from '../../../components/ui';
 import { useDay } from '../../../lib/day';
 import { colours, space, teamColour, fonts } from '../../../theme';
 
+// The team each player last acknowledged, per day, so a shuffle shows once.
+const seenTeam = new Map<string, string | null>();
+
 export default function GameTab() {
-  const { data, me, teamById, sectionById } = useDay();
+  const { id, data, me, teamById, sectionById } = useDay();
+  const [, refresh] = useState(0);
   if (!data || !me) return null;
+
+  // Picking a team yourself after having none isn't news.
+  if (!seenTeam.has(id) || seenTeam.get(id) === null) seenTeam.set(id, me.team_id);
+  const movedTo = me.team_id && seenTeam.get(id) !== me.team_id ? teamById(me.team_id) : undefined;
 
   const team = teamById(me.team_id);
   const section = sectionById(me.section_id);
@@ -20,6 +29,22 @@ export default function GameTab() {
 
   return (
     <Screen>
+      {movedTo && (
+        <Card style={{ borderColor: teamColour(movedTo.colour), padding: space.lg, gap: space.md }}>
+          <Text style={styles.kicker}>Teams changed</Text>
+          <Display size={30} colour={teamColour(movedTo.colour)}>
+            You’re on {movedTo.name}
+          </Display>
+          <Body muted>{section ? `Section: ${section.name}` : 'Your section was reset. Pick one on the Squad tab if you use them.'}</Body>
+          <Button
+            title="Got it"
+            onPress={() => {
+              seenTeam.set(id, me.team_id);
+              refresh((n) => n + 1);
+            }}
+          />
+        </Card>
+      )}
       {team ? (
         <View style={[styles.assignment, { borderColor: teamColour(team.colour) }]}>
           <Text style={[styles.assignmentText, { color: teamColour(team.colour) }]}>

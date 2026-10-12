@@ -26,6 +26,8 @@ export interface GameDay {
   created_by: string;
   created_at: string;
   closed_at: string | null;
+  /** Teams in use: 2, 3 or 4. */
+  team_count: number;
 }
 
 export interface Team {
@@ -34,6 +36,8 @@ export interface Team {
   name: string;
   colour: 'blue' | 'red' | 'yellow' | 'purple';
   sort_order: number;
+  /** Teams beyond the day's team count are kept for history but not used. */
+  active: boolean;
 }
 
 export interface Section {

@@ -22,7 +22,7 @@ function icon(name: IconName) {
 // The backend advances lazily, so when this phone's projected clock says a
 // countdown or timed game is over, it nudges the backend with tick_game.
 function GameWatcher() {
-  const { data, reload } = useDay();
+  const { data, reload, me } = useDay();
   const now = useServerNow(500);
   const game = data?.game ?? null;
   const projected = game ? clockFor(game, now).state : null;
@@ -47,6 +47,14 @@ function GameWatcher() {
       Vibration.vibrate(projected === 'complete' ? [0, 400, 200, 400] : 400);
     }
   }, [game, projected]);
+
+  // Buzz when an admin moves you to another team (e.g. a shuffle).
+  const lastTeam = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    const team = me?.team_id ?? null;
+    if (lastTeam.current !== undefined && team && team !== lastTeam.current) Vibration.vibrate(400);
+    lastTeam.current = team;
+  }, [me?.team_id]);
 
   // King of the Hill: buzz when the hill moves or changes hands.
   const koth = data?.koth ?? null;
@@ -117,7 +125,7 @@ function ActiveDay({ initiallyAssigned }: { initiallyAssigned: boolean }) {
   if (!setupDone || (!assigned && !(isAdmin && hostOnly.has(id)))) {
     return (
       <Screen edges={['top', 'bottom']}>
-        <Title>Check in</Title>
+        <Title>{setupDone ? 'Pick your team' : 'Check in'}</Title>
         <Body muted>{data.day.name}</Body>
         <AssignmentSetup doneTitle="Check in" onDone={() => setSetupDone(true)} />
         {isAdmin && !assigned && (
