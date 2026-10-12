@@ -59,31 +59,13 @@ export default function HostTab() {
         <Button title="Manage players and teams" variant="quiet" onPress={() => router.navigate(`/day/${id}/team`)} />
       </Card>
 
-      <Label>Field</Label>
-      <Card>
-        {data.field ? (
-          <View style={styles.between}>
-            <View style={{ flexShrink: 1 }}>
-              <Text style={styles.fieldName}>{data.field.name}</Text>
-              {!!data.field.location && <Text style={styles.meta}>{data.field.location}</Text>}
-            </View>
-            <View style={styles.links}>
-              <Pressable onPress={() => router.navigate(`/day/${id}/map`)} accessibilityRole="button" hitSlop={8}>
-                <Text style={styles.link}>View</Text>
-              </Pressable>
-              <Pressable onPress={() => setPicking(true)} accessibilityRole="button" hitSlop={8}>
-                <Text style={styles.link}>Change</Text>
-              </Pressable>
-            </View>
-          </View>
-        ) : (
-          <>
-            <Text style={[styles.fieldName, { color: colours.danger }]}>No field yet</Text>
-            <Body muted>Pick one before the first game.</Body>
-            <Button title="Choose field" onPress={() => setPicking(true)} />
-          </>
-        )}
-      </Card>
+      {!data.field && (
+        <Card>
+          <Text style={[styles.fieldName, { color: colours.danger }]}>No field yet</Text>
+          <Body muted>Pick one before the first game.</Body>
+          <Button title="Choose field" onPress={() => setPicking(true)} />
+        </Card>
+      )}
       {picking && <FieldPicker onClose={() => setPicking(false)} />}
 
       <Pressable onPress={() => setSettings(!settings)} accessibilityRole="button" style={styles.fold}>
@@ -121,13 +103,10 @@ export default function HostTab() {
 const styles = StyleSheet.create({
   between: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: space.md },
   big: { color: colours.text, fontFamily: fonts.semibold, fontSize: 17 },
-  link: { color: colours.accent, fontFamily: fonts.semibold, fontSize: 15 },
-  links: { flexDirection: 'row', gap: space.lg },
   counts: { flexDirection: 'row', flexWrap: 'wrap', columnGap: space.lg, rowGap: space.xs },
   count: { fontFamily: fonts.medium, fontSize: 14, fontVariant: ['tabular-nums'] },
   waiting: { color: colours.danger, fontFamily: fonts.regular, fontSize: 14 },
   fieldName: { color: colours.text, fontSize: 22, ...display },
-  meta: { color: colours.textSecondary, fontFamily: fonts.regular, fontSize: 14 },
   bar: { flexDirection: 'row', height: 8, borderRadius: 4, overflow: 'hidden', gap: 2 },
   fold: {
     flexDirection: 'row',
