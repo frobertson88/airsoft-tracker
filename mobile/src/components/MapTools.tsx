@@ -222,13 +222,14 @@ export function useMapTools({
   }, [tool.type, draft, drawings, objects, hostView]);
 
   const onMapPress = (c: Coord) => {
-    setPalette(null);
+    // The icon palette stays open while dropping markers, to switch type quickly.
+    if (tool.type !== 'marker') setPalette(null);
     if (tool.type === 'cursor') {
       setSelectedId(null);
       return;
     }
     if (tool.type === 'marker') {
-      place('marker', [c], { marker_type: tool.id, label: text.trim() || undefined });
+      place('marker', [c], { marker_type: tool.id });
       return;
     }
     if (tool.type === 'delete') {
@@ -403,7 +404,10 @@ export function useMapTools({
             icon={m.icon}
             colour={affColour}
             active={tool.type === 'marker' && tool.id === m.id}
-            onPress={() => reset({ type: 'marker', id: m.id })}
+            onPress={() => {
+              reset({ type: 'marker', id: m.id });
+              setPalette('icons');
+            }}
           />
         ))}
       </View>
@@ -453,9 +457,15 @@ export function useMapTools({
     ) : null;
 
   const needsText = tool.type === 'draw' && drawTool(tool.kind).kind === 'label' && draft.length > 0;
-  const optionalNote = tool.type === 'marker' || (tool.type === 'draw' && tool.kind !== 'label' && tool.kind !== 'waypoints');
+  const optionalNote = (tool.type === 'draw' && tool.kind !== 'label' && tool.kind !== 'waypoints');
 
-  const strip = toolName ? (
+  const strip = tool.type === 'marker' ? (
+    message ? (
+      <Pressable style={styles.strip} onPress={() => setMessage('')}>
+        <Text style={styles.stripError}>{message}</Text>
+      </Pressable>
+    ) : null
+  ) : toolName ? (
     <View style={styles.strip}>
       <Text style={styles.stripTitle} numberOfLines={1}>
         {toolName}
