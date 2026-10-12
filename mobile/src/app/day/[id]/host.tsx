@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { FieldPicker } from '../../../components/FieldPicker';
 import { GameControls } from '../../../components/GameControls';
+import { MemberRow } from '../../../components/MemberList';
 import { TrackingSettings } from '../../../components/TrackingSettings';
 import { Body, Button, Card, ConfirmButton, ErrorText, Label, Screen } from '../../../components/ui';
 import { api } from '../../../lib/api';
@@ -15,7 +16,7 @@ import { goHome } from '../../../lib/nav';
 import { colours, display, space, teamColour, fonts } from '../../../theme';
 
 export default function HostTab() {
-  const { id, data, isAdmin, callsign } = useDay();
+  const { id, data, isAdmin } = useDay();
   const { run, busy, error } = useCommand();
   const [picking, setPicking] = useState(false);
   const [settings, setSettings] = useState(false);
@@ -32,12 +33,7 @@ export default function HostTab() {
 
       <Label>Players</Label>
       <Card style={{ gap: space.md }}>
-        <View style={styles.between}>
-          <Text style={styles.big}>{active.length} checked in</Text>
-          <Pressable onPress={() => router.navigate(`/day/${id}/team`)} accessibilityRole="button" hitSlop={8}>
-            <Text style={styles.link}>Manage</Text>
-          </Pressable>
-        </View>
+        <Text style={styles.big}>{active.length} checked in</Text>
         {playing > 0 && (
           <View style={styles.bar}>
             {counts.map(({ team, n }) =>
@@ -53,10 +49,14 @@ export default function HostTab() {
           ))}
         </View>
         {incomplete.length > 0 && (
-          <Text style={styles.waiting}>
-            Still choosing: {incomplete.map((m) => callsign(m.user_id)).join(', ')}
-          </Text>
+          <>
+            <Text style={styles.waiting}>Still choosing a team or role</Text>
+            {incomplete.map((m) => (
+              <MemberRow key={m.user_id} member={m} />
+            ))}
+          </>
         )}
+        <Button title="Manage players and teams" variant="quiet" onPress={() => router.navigate(`/day/${id}/team`)} />
       </Card>
 
       <Label>Field</Label>
