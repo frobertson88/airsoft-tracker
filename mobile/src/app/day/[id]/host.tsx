@@ -12,7 +12,6 @@ import { TrackingSettings } from '../../../components/TrackingSettings';
 import { Body, Button, Card, ConfirmButton, ErrorText, Label, Screen } from '../../../components/ui';
 import { api } from '../../../lib/api';
 import { useCommand, useDay } from '../../../lib/day';
-import { clockFor } from '../../../lib/game';
 import { goHome } from '../../../lib/nav';
 import { colours, display, space, teamColour, fonts } from '../../../theme';
 
@@ -26,7 +25,7 @@ export default function HostTab() {
   const active = data.members.filter((m) => m.status === 'active');
   const incomplete = active.filter((m) => !m.day_role || !m.team_id);
   const counts = data.teams.map((t) => ({ team: t, n: active.filter((m) => m.team_id === t.id).length }));
-  const gameState = data.game ? clockFor(data.game, Date.now()).state : null;
+  const gameState = data.game?.state ?? null;
   const gameRunning = !!gameState && gameState !== 'ready' && gameState !== 'complete';
   const playing = counts.reduce((sum, c) => sum + c.n, 0);
 
