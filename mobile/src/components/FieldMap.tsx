@@ -46,6 +46,8 @@ export interface MapHill {
 /** A map drawing, ready to show (lib/mapTools.ts has the data). */
 export interface MapDrawing {
   id: string;
+  /** Stable render key (a new drawing keeps its first key once saved, so it doesn't flicker). */
+  key?: string;
   kind: MapObjectKind;
   /** Marker icon (MaterialCommunityIcons). */
   icon?: string;
@@ -79,6 +81,8 @@ export interface FieldMapProps {
   onDrawingPress?: (id: string) => void;
   onDrawingMove?: (id: string, points: Coord[]) => void;
   toolDraft?: ToolDraft | null;
+  /** Taps register straight away (double-tap zoom is off while a tool is in use). */
+  quickTaps?: boolean;
   onPress?: (c: Coord) => void;
   onLongPress?: (c: Coord) => void;
   onViewChange?: (v: FieldView) => void;
@@ -116,6 +120,7 @@ export const FieldMap = forwardRef<FieldMapHandle, FieldMapProps>(function Field
     onDrawingPress,
     onDrawingMove,
     toolDraft,
+    quickTaps,
     onPress,
     onLongPress,
     onViewChange,
@@ -146,6 +151,7 @@ export const FieldMap = forwardRef<FieldMapHandle, FieldMapProps>(function Field
       showsMyLocationButton={false}
       showsCompass
       rotateEnabled={false}
+      zoomTapEnabled={!quickTaps}
       toolbarEnabled={false}
       onPress={
         onPress
@@ -267,7 +273,7 @@ export const FieldMap = forwardRef<FieldMapHandle, FieldMapProps>(function Field
 
       {drawings?.map((d) => (
         <Drawing
-          key={d.id}
+          key={d.key ?? d.id}
           d={d}
           selected={d.id === selectedId}
           onPress={

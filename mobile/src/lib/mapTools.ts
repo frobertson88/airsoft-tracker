@@ -26,6 +26,8 @@ export interface MapObject {
   created_by: string;
   created_at: string;
   updated_at: string;
+  /** On this phone only: the key a new drawing was first shown with, kept so it doesn't redraw. */
+  key?: string;
 }
 
 /** Who a new drawing is for. */
@@ -132,7 +134,11 @@ export function useMapObjects(dayId: string, refreshKey: unknown) {
         .eq('game_day_id', dayId)
         .order('created_at')
         .then(({ data }) => {
-          if (!cancelled && data) setObjects(data as MapObject[]);
+          if (cancelled || !data) return;
+          setObjects((prev) => {
+            const keys = new Map(prev.map((o) => [o.id, o.key]));
+            return (data as MapObject[]).map((o) => ({ ...o, key: keys.get(o.id) }));
+          });
         });
     const schedule = () => {
       if (pending.current) clearTimeout(pending.current);

@@ -25,7 +25,7 @@ import {
 import { colours, fonts, radius, space, teamColour } from '../theme';
 
 type Tool = { type: 'cursor' } | { type: 'marker'; id: string } | { type: 'draw'; kind: DrawKind } | { type: 'delete' };
-type Palette = 'icons' | 'draw' | 'target' | null;
+type Palette = 'icons' | 'draw' | 'target' | 'key' | null;
 
 const sameTarget = (a: Target, b: Target) =>
   a.audience === b.audience && a.team_id === b.team_id && a.section_id === b.section_id;
@@ -35,11 +35,15 @@ export function useMapTools({
   setObjects,
   reload,
   now,
+  fieldName,
+  hasHill,
 }: {
   objects: MapObject[];
   setObjects: (f: (prev: MapObject[]) => MapObject[]) => void;
   reload: () => void;
   now: number;
+  fieldName: string;
+  hasHill: boolean;
 }) {
   const { id: dayId, data, me, isAdmin, callsign, teamById, sectionById } = useDay();
   const [tool, setTool] = useState<Tool>({ type: 'cursor' });
@@ -124,6 +128,7 @@ export function useMapTools({
           const team = teamById(o.colour_team_id);
           return {
             id: o.id,
+            key: o.key ?? o.id,
             kind: o.kind,
             icon: o.kind === 'marker' ? markerType(o.marker_type).icon : undefined,
             label: o.label,
@@ -204,7 +209,7 @@ export function useMapTools({
     setObjects((prev) =>
       !ok || prev.some((o) => o.id === saved)
         ? prev.filter((o) => o.id !== tmp)
-        : prev.map((o) => (o.id === tmp ? { ...o, id: saved } : o)),
+        : prev.map((o) => (o.id === tmp ? { ...o, id: saved, key: tmp } : o)),
     );
     return ok;
   };
@@ -391,6 +396,7 @@ export function useMapTools({
         onPress={() => setPalette(palette === 'draw' ? null : 'draw')}
       />
       <RailButton label="Delete" icon="eraser" active={tool.type === 'delete'} onPress={() => reset({ type: 'delete' })} />
+      <RailButton label="Map key" icon="map-legend" active={palette === 'key'} onPress={() => setPalette(palette === 'key' ? null : 'key')} />
     </View>
   );
 
@@ -427,6 +433,19 @@ export function useMapTools({
           />
         ))}
       </View>
+    ) : palette === 'key' ? (
+      <Pressable style={styles.keyPanel} onPress={() => setPalette(null)} accessibilityRole="button" accessibilityLabel="Close map key">
+        <Text style={styles.keyTitle} numberOfLines={1}>
+          {fieldName}
+        </Text>
+        <KeyRow swatch={<View style={[styles.keySwatch, { backgroundColor: 'rgba(255,159,69,0.6)', borderColor: colours.danger }]} />} text="No-go area" />
+        <KeyRow swatch={<View style={[styles.keySwatch, { borderColor: colours.danger, borderStyle: 'dashed', borderWidth: 2 }]} />} text="Danger area" />
+        <KeyRow swatch={<View style={[styles.keySwatch, { borderColor: colours.accent, borderWidth: 2 }]} />} text="Field boundary" />
+        {hasHill && <KeyRow swatch={<MaterialCommunityIcons name="flag" size={14} color={colours.text} />} text="King of the Hill" />}
+        <KeyRow swatch={<View style={[styles.keySwatch, { backgroundColor: colours.accent }]} />} text="Friendly drawing (team colour)" />
+        <KeyRow swatch={<View style={[styles.keySwatch, { backgroundColor: colours.enemy, borderStyle: 'dashed', borderColor: colours.text, borderWidth: 1 }]} />} text="Enemy sighting (gone after 30 min)" />
+        <KeyRow swatch={<View style={[styles.keyDot, { backgroundColor: colours.text }]} />} text="Teammate (greyed when old)" />
+      </Pressable>
     ) : palette === 'target' ? (
       <ScrollView style={styles.targetMenu} contentContainerStyle={{ gap: 2 }}>
         {choices
@@ -565,12 +584,21 @@ export function useMapTools({
     onMapPress,
     onDrawingPress,
     onDrawingMove,
-    /** True while a tool is active or a drawing is selected (the strip is showing). */
-    busyStrip: !!strip,
+    /** A placing or drawing tool is in use (map taps should register straight away). */
+    toolActive: tool.type !== 'cursor',
     rail,
     palette: paletteView,
     strip,
   };
+}
+
+function KeyRow({ swatch, text }: { swatch: ReactNode; text: string }) {
+  return (
+    <View style={styles.keyRow}>
+      <View style={styles.keyIcon}>{swatch}</View>
+      <Text style={styles.keyText}>{text}</Text>
+    </View>
+  );
 }
 
 function RailButton({
@@ -686,6 +714,13 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   paletteLabel: { color: colours.textSecondary, fontFamily: fonts.regular, fontSize: 10, maxWidth: 52 },
+  keyPanel: { ...panel, width: 230, padding: space.sm, gap: space.xs },
+  keyTitle: { color: colours.text, fontFamily: fonts.display, fontSize: 16, textTransform: 'uppercase' },
+  keyRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  keyIcon: { width: 18, alignItems: 'center' },
+  keySwatch: { width: 16, height: 16, borderRadius: 3, borderWidth: 1, borderColor: 'transparent' },
+  keyDot: { width: 12, height: 12, borderRadius: 6, borderWidth: 2, borderColor: '#ffffff' },
+  keyText: { color: colours.textSecondary, fontFamily: fonts.regular, fontSize: 12, flexShrink: 1 },
   targetMenu: { ...panel, maxHeight: 300, width: 220, padding: space.xs },
   targetRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, minHeight: 40, paddingHorizontal: space.sm, borderRadius: 8 },
   targetRowOn: { backgroundColor: colours.selection },

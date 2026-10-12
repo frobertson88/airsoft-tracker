@@ -34,7 +34,14 @@ export default function MapTab() {
   const [mapReloads, setMapReloads] = useState(0);
   const mapKey = `${me?.team_id}:${me?.section_id}:${me?.is_admin}:${me?.map_host_view}:${mapReloads}`;
   const { objects, setObjects } = useMapObjects(id, mapKey);
-  const tools = useMapTools({ objects, setObjects, reload: () => setMapReloads((n) => n + 1), now });
+  const tools = useMapTools({
+    objects,
+    setObjects,
+    reload: () => setMapReloads((n) => n + 1),
+    now,
+    fieldName: data?.field?.name ?? 'Field',
+    hasHill: !!data?.koth,
+  });
   const showTools = Platform.OS !== 'web';
 
   const players = useMemo<MapPlayer[]>(() => {
@@ -120,6 +127,7 @@ export default function MapTab() {
         onDrawingPress={tools.onDrawingPress}
         onDrawingMove={tools.onDrawingMove}
         toolDraft={tools.toolDraft}
+        quickTaps={showTools && tools.toolActive}
         onPress={showTools ? tools.onMapPress : undefined}
         hill={
           hillSpot && hill
@@ -131,15 +139,6 @@ export default function MapTab() {
           setHillSpot(c);
         } : undefined}
         showsUserLocation={Platform.OS !== 'web'} />
-      <View style={styles.banner} pointerEvents="none">
-        <Text style={styles.fieldName}>{field.name}</Text>
-        <View style={styles.legend}>
-          <View style={[styles.swatch, { backgroundColor: 'rgba(255,159,69,0.6)' }]} />
-          <Text style={styles.legendText}>No-go</Text>
-          <View style={[styles.swatch, styles.swatchDashed]} />
-          <Text style={styles.legendText}>Danger</Text>
-        </View>
-      </View>
       {showTools && (
         <View style={styles.tools} pointerEvents="box-none">
           {tools.rail}
@@ -198,24 +197,6 @@ export default function MapTab() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colours.background },
-  banner: {
-    position: 'absolute',
-    top: space.sm,
-    left: space.sm,
-    right: space.sm,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: 'rgba(11,16,12,0.85)',
-    borderRadius: radius,
-    paddingHorizontal: space.md,
-    paddingVertical: space.sm,
-  },
-  fieldName: { color: colours.text, fontFamily: fonts.display, fontSize: 18, textTransform: 'uppercase', flexShrink: 1 },
-  legend: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
-  legendText: { color: colours.textSecondary, fontFamily: fonts.regular, fontSize: 12, marginRight: space.xs },
-  swatch: { width: 14, height: 14, borderRadius: 3, borderColor: colours.danger, borderWidth: 1 },
-  swatchDashed: { borderStyle: 'dashed', borderWidth: 2 },
   moveCard: {
     position: 'absolute',
     left: space.sm,
@@ -229,7 +210,7 @@ const styles = StyleSheet.create({
     gap: space.sm,
   },
   moveRow: { flexDirection: 'row', gap: space.sm },
-  tools: { position: 'absolute', top: 64, left: space.sm, flexDirection: 'row', alignItems: 'flex-start', gap: space.xs },
+  tools: { position: 'absolute', top: space.sm, left: space.sm, flexDirection: 'row', alignItems: 'flex-start', gap: space.xs },
   strip: { position: 'absolute', left: 64, right: 72, bottom: space.md },
   trackingBar: {
     position: 'absolute',
