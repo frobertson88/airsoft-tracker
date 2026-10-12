@@ -5,6 +5,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Location from 'expo-location';
 import { router } from 'expo-router';
 import { useMemo, useRef, useState } from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { FieldMap, type FieldMapHandle, type MapHill, type MapPlayer } from '../../../components/FieldMap';
 import { useMapTools } from '../../../components/MapTools';
@@ -23,6 +24,8 @@ import { colours, fonts, radius, space, teamColour } from '../../../theme';
 export default function MapTab() {
   const { id, data, me, isAdmin, callsign, teamById, sectionById } = useDay();
   const tracking = useTracking();
+  // The Map has no header, so keep its buttons clear of the status bar.
+  const insets = useSafeAreaInsets();
   const mapRef = useRef<FieldMapHandle>(null);
   // Admins press and hold to move the King of the Hill hill.
   const [hillSpot, setHillSpot] = useState<Coord | null>(null);
@@ -111,7 +114,7 @@ export default function MapTab() {
   const field = data.field;
   if (!field) {
     return (
-      <Screen>
+      <Screen edges={['top']}>
         <Body>No field picked yet.</Body>
         <Body muted>{isAdmin ? 'Choose one on the Host tab.' : 'The host will pick one before the first game.'}</Body>
         {isAdmin && <Button title="Go to Host" variant="quiet" onPress={() => router.navigate(`/day/${id}/host`)} />}
@@ -149,7 +152,7 @@ export default function MapTab() {
         } : undefined}
         showsUserLocation={Platform.OS !== 'web'} />
       {showTools && (
-        <View style={styles.tools} pointerEvents="box-none">
+        <View style={[styles.tools, { top: insets.top + space.sm }]} pointerEvents="box-none">
           {tools.rail}
           {tools.palette}
         </View>
@@ -196,6 +199,7 @@ export default function MapTab() {
               bottomExtra={trackingBar}
               onHit={medicPlay.setMine}
               reload={medicPlay.reload}
+              top={insets.top}
             />
           );
         }

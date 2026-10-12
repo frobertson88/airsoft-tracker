@@ -35,6 +35,7 @@ export function MedicOverlay({
   bottomExtra,
   onHit,
   reload,
+  top = 0,
 }: {
   game: Game;
   medic: MedicSettings;
@@ -47,6 +48,8 @@ export function MedicOverlay({
   bottomExtra?: ReactNode;
   onHit: (m: MyMedic) => void;
   reload: () => void;
+  /** Safe-area inset above the map. */
+  top?: number;
 }) {
   const now = useServerNow(1000);
   const state = clockFor(game, now).state;
@@ -96,7 +99,7 @@ export function MedicOverlay({
         <Pressable
           onPress={() => hurt && setOpen(true)}
           accessibilityRole="button"
-          style={[styles.pill, { borderColor: statusColour(mine) }]}
+          style={[styles.pill, { top: top + space.sm, borderColor: statusColour(mine) }]}
         >
           <Text style={[styles.pillText, { color: statusColour(mine) }]}>
             {statusLabel(mine, medic)}

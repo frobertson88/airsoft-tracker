@@ -165,7 +165,7 @@ function ActiveDay({ initiallyAssigned }: { initiallyAssigned: boolean }) {
         }}
       >
         <Tabs.Screen name="index" options={{ title: 'Game', tabBarIcon: icon('radio-button-on-outline') }} />
-        <Tabs.Screen name="map" options={{ title: 'Map', tabBarIcon: icon('map-outline') }} />
+        <Tabs.Screen name="map" options={{ title: 'Map', tabBarIcon: icon('map-outline'), headerShown: false }} />
         <Tabs.Screen name="scan" options={{ title: 'Scan', tabBarIcon: icon('scan-outline') }} />
         <Tabs.Screen name="team" options={{ title: 'Squad', tabBarIcon: icon('people-outline') }} />
         {/* Admins get Host in place of More (docs/app-flow.md §5). */}

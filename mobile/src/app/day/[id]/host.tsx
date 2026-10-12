@@ -1,23 +1,24 @@
 // Host tab: admins manage the day here instead of an Admin Mode switch (docs/app-flow.md §12).
+// Kept calm: the game first, then one card each for players and the field, with
+// the rarely used day settings folded away at the bottom.
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { FieldPicker } from '../../../components/FieldPicker';
 import { GameControls } from '../../../components/GameControls';
 import { TrackingSettings } from '../../../components/TrackingSettings';
-import { MemberRow } from '../../../components/MemberList';
 import { Body, Button, Card, ConfirmButton, ErrorText, Label, Screen } from '../../../components/ui';
 import { api } from '../../../lib/api';
-import { useAuth } from '../../../lib/auth';
 import { useCommand, useDay } from '../../../lib/day';
 import { goHome } from '../../../lib/nav';
 import { colours, display, space, teamColour, fonts } from '../../../theme';
 
 export default function HostTab() {
-  const { id, data, isAdmin } = useDay();
-  const { profile } = useAuth();
+  const { id, data, isAdmin, callsign } = useDay();
   const { run, busy, error } = useCommand();
   const [picking, setPicking] = useState(false);
+  const [settings, setSettings] = useState(false);
   if (!data || !isAdmin) return null;
 
   const active = data.members.filter((m) => m.status === 'active');
@@ -29,11 +30,13 @@ export default function HostTab() {
     <Screen>
       <GameControls />
 
-      <Label>Lobby</Label>
-      <Card style={{ padding: space.lg, gap: space.md }}>
+      <Label>Players</Label>
+      <Card style={{ gap: space.md }}>
         <View style={styles.between}>
-          <Body muted>Lobby</Body>
-          <Text style={styles.mono}>{active.length} checked in</Text>
+          <Text style={styles.big}>{active.length} checked in</Text>
+          <Pressable onPress={() => router.navigate(`/day/${id}/team`)} accessibilityRole="button" hitSlop={8}>
+            <Text style={styles.link}>Manage</Text>
+          </Pressable>
         </View>
         {playing > 0 && (
           <View style={styles.bar}>
@@ -42,86 +45,98 @@ export default function HostTab() {
             )}
           </View>
         )}
-        <View style={styles.between}>
+        <View style={styles.counts}>
           {counts.map(({ team, n }) => (
-            <Text key={team.id} style={{ color: teamColour(team.colour), fontFamily: fonts.regular, fontSize: 14 }}>
+            <Text key={team.id} style={[styles.count, { color: teamColour(team.colour) }]}>
               {team.name} {n}
             </Text>
           ))}
         </View>
-      </Card>
-
-      <Label>Still choosing a team or role</Label>
-      <Card>
-        {incomplete.length === 0 ? (
-          <Body muted>Everyone is checked in.</Body>
-        ) : (
-          incomplete.map((m) => <MemberRow key={m.user_id} member={m} />)
+        {incomplete.length > 0 && (
+          <Text style={styles.waiting}>
+            Still choosing: {incomplete.map((m) => callsign(m.user_id)).join(', ')}
+          </Text>
         )}
       </Card>
-
-      <Button
-        title="Manage players and teams"
-        variant="quiet"
-        onPress={() => router.navigate(`/day/${id}/team`)}
-      />
 
       <Label>Field</Label>
       <Card>
         {data.field ? (
-          <>
-            <Text style={styles.fieldName}>{data.field.name}</Text>
-            <Body muted>
-              {[data.field.location, `${data.field.data.areas.length} areas`, `${data.field.data.points.length} points`]
-                .filter(Boolean)
-                .join(' · ')}
-            </Body>
-            <Button title="Review on map" variant="quiet" onPress={() => router.navigate(`/day/${id}/map`)} />
-            <Button title="Change field" variant="secondary" onPress={() => setPicking(true)} />
-          </>
+          <View style={styles.between}>
+            <View style={{ flexShrink: 1 }}>
+              <Text style={styles.fieldName}>{data.field.name}</Text>
+              {!!data.field.location && <Text style={styles.meta}>{data.field.location}</Text>}
+            </View>
+            <View style={styles.links}>
+              <Pressable onPress={() => router.navigate(`/day/${id}/map`)} accessibilityRole="button" hitSlop={8}>
+                <Text style={styles.link}>View</Text>
+              </Pressable>
+              <Pressable onPress={() => setPicking(true)} accessibilityRole="button" hitSlop={8}>
+                <Text style={styles.link}>Change</Text>
+              </Pressable>
+            </View>
+          </View>
         ) : (
           <>
-            <Text style={[styles.fieldName, { color: colours.danger }]}>Field not selected</Text>
-            <Body muted>Pick a field before the first game. Players see it on the Map tab.</Body>
+            <Text style={[styles.fieldName, { color: colours.danger }]}>No field yet</Text>
+            <Body muted>Pick one before the first game.</Body>
             <Button title="Choose field" onPress={() => setPicking(true)} />
           </>
         )}
       </Card>
       {picking && <FieldPicker onClose={() => setPicking(false)} />}
 
-
-      <Label>You</Label>
-      <Card>
-        <Body>{profile?.callsign}</Body>
-        <Button title="Edit profile" variant="secondary" onPress={() => router.push('/profile')} />
-      </Card>
-      <TrackingSettings />
-
-      <Label>Game Day</Label>
-      <ConfirmButton
-        title="Leave Game Day"
-        confirmTitle="Tap again to leave"
-        busy={busy}
-        onConfirm={async () => {
-          if (await run(() => api.leaveGameDay(id))) goHome();
-        }}
-      />
-      <ConfirmButton
-        title="End Game Day"
-        confirmTitle="Tap again. This can’t be undone"
-        busy={busy}
-        onConfirm={async () => {
-          if (await run(() => api.closeGameDay(id))) goHome();
-        }}
-      />
+      <Pressable onPress={() => setSettings(!settings)} accessibilityRole="button" style={styles.fold}>
+        <Text style={styles.foldText}>Day settings</Text>
+        <Ionicons name={settings ? 'chevron-up' : 'chevron-down'} size={18} color={colours.textSecondary} />
+      </Pressable>
+      {settings && (
+        <>
+          <Button title="Edit your profile" variant="secondary" onPress={() => router.push('/profile')} />
+          <TrackingSettings />
+          <Label>Game Day</Label>
+          <ConfirmButton
+            title="Leave Game Day"
+            confirmTitle="Tap again to leave"
+            busy={busy}
+            onConfirm={async () => {
+              if (await run(() => api.leaveGameDay(id))) goHome();
+            }}
+          />
+          <ConfirmButton
+            title="End Game Day"
+            confirmTitle="Tap again. This can’t be undone"
+            busy={busy}
+            onConfirm={async () => {
+              if (await run(() => api.closeGameDay(id))) goHome();
+            }}
+          />
+        </>
+      )}
       <ErrorText>{error}</ErrorText>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  between: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  mono: { color: colours.text, fontFamily: fonts.regular, fontSize: 14, fontVariant: ['tabular-nums'] },
+  between: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: space.md },
+  big: { color: colours.text, fontFamily: fonts.semibold, fontSize: 17 },
+  link: { color: colours.accent, fontFamily: fonts.semibold, fontSize: 15 },
+  links: { flexDirection: 'row', gap: space.lg },
+  counts: { flexDirection: 'row', flexWrap: 'wrap', columnGap: space.lg, rowGap: space.xs },
+  count: { fontFamily: fonts.medium, fontSize: 14, fontVariant: ['tabular-nums'] },
+  waiting: { color: colours.danger, fontFamily: fonts.regular, fontSize: 14 },
   fieldName: { color: colours.text, fontSize: 22, ...display },
-  bar: { flexDirection: 'row', height: 10, borderRadius: 5, overflow: 'hidden', gap: 2 },
+  meta: { color: colours.textSecondary, fontFamily: fonts.regular, fontSize: 14 },
+  bar: { flexDirection: 'row', height: 8, borderRadius: 4, overflow: 'hidden', gap: 2 },
+  fold: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 48,
+    marginTop: space.md,
+    borderTopWidth: 1,
+    borderTopColor: colours.border,
+  },
+  foldText: { color: colours.textSecondary, fontFamily: fonts.semibold, fontSize: 13, textTransform: 'uppercase', letterSpacing: 0.5 },
 });
