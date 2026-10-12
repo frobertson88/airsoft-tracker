@@ -4,9 +4,10 @@ import { Modal } from 'react-native';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useCommand, useDay } from '../lib/day';
+import { medicOf } from '../lib/medic';
 import { ROLE_CHOICES, type DayMember, type DayRole } from '../lib/types';
 import { teamColour } from '../theme';
-import { Body, Button, Chip, ConfirmButton, ErrorText, Label, Row, Screen, Title } from './ui';
+import { Body, Button, Chip, ConfirmButton, ErrorText, Field, Label, Row, Screen, Title } from './ui';
 
 // Render with key={member.user_id} so the form resets per player.
 export function MemberSheet({ member, onClose }: { member: DayMember; onClose: () => void }) {
@@ -16,6 +17,7 @@ export function MemberSheet({ member, onClose }: { member: DayMember; onClose: (
   const [role, setRole] = useState<DayRole | null>(member.day_role);
   const [team, setTeam] = useState<string | null>(member.team_id);
   const [section, setSection] = useState<string | null>(member.section_id);
+  const [reason, setReason] = useState('');
 
   if (!data) return null;
   const memberSection = sectionById(member.section_id);
@@ -91,6 +93,20 @@ export function MemberSheet({ member, onClose }: { member: DayMember; onClose: (
             busy={busy}
             onPress={() => close(() => api.setSectionLeader(memberSection.id, member.user_id))}
           />
+        )}
+
+        {data.game && medicOf(data.game) && data.game.state !== 'complete' && (
+          <>
+            <Label>Undo a hit</Label>
+            <Body muted>Takes back their last hit this life, for a mistake. The history keeps both.</Body>
+            <Field value={reason} onChangeText={setReason} placeholder="Reason, e.g. pressed by mistake" maxLength={200} />
+            <Button
+              title="Undo last hit"
+              variant="secondary"
+              busy={busy}
+              onPress={() => close(() => api.undoHit(data.game!.id, member.user_id, reason.trim()))}
+            />
+          </>
         )}
 
         <Label>Access</Label>

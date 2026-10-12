@@ -2,6 +2,7 @@
 // the source of truth; phones project the clock forward between updates and
 // call tick_game when a countdown or a timed game should have moved on.
 import { useEffect, useState } from 'react';
+import type { MedicSettings } from './medic';
 
 export type GameState = 'ready' | 'countdown' | 'live' | 'paused' | 'resuming' | 'complete';
 
@@ -20,6 +21,8 @@ export interface KothSettings {
   scoring: boolean;
   rate: number;
   relocate_minutes: number | null;
+  /** Any mode: the medic rules copied into this game, or null for off. */
+  medic?: MedicSettings | null;
 }
 
 export const KOTH_DEFAULTS: KothSettings = { radius: 25, scoring: true, rate: 1, relocate_minutes: null };
@@ -161,7 +164,8 @@ export function kothScores(k: KothState, g: Game, elapsed: number): Record<strin
 
 export function describeSettings(mode: GameMode, s: Partial<KothSettings>) {
   const teams = `${s.team_count ?? 2} teams`;
-  if (mode !== 'koth') return `${MODE_LABEL.free} · ${teams}`;
+  const medic = s.medic ? `Medic: ${s.medic.name}` : null;
+  if (mode !== 'koth') return [MODE_LABEL.free, teams, medic].filter(Boolean).join(' · ');
   const k = { ...KOTH_DEFAULTS, ...s };
   return [
     MODE_LABEL.koth,
@@ -169,6 +173,7 @@ export function describeSettings(mode: GameMode, s: Partial<KothSettings>) {
     `${k.radius} m hill`,
     k.relocate_minutes ? `moves every ${k.relocate_minutes} min` : 'fixed hill',
     k.scoring ? null : 'no scoring',
+    medic,
   ]
     .filter(Boolean)
     .join(' · ');

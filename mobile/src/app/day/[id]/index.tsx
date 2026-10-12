@@ -5,6 +5,7 @@ import { MemberRow } from '../../../components/MemberList';
 import { GameClock } from '../../../components/GameClock';
 import { Body, Button, Card, Display, Label, Screen } from '../../../components/ui';
 import { useDay } from '../../../lib/day';
+import { EXPIRY_LABEL, helperText, medicOf } from '../../../lib/medic';
 import { colours, space, teamColour, fonts } from '../../../theme';
 
 // The team each player last acknowledged, per day, so a shuffle shows once.
@@ -19,6 +20,7 @@ export default function GameTab() {
   if (!seenTeam.has(id) || seenTeam.get(id) === null) seenTeam.set(id, me.team_id);
   const movedTo = me.team_id && seenTeam.get(id) !== me.team_id ? teamById(me.team_id) : undefined;
 
+  const medic = medicOf(data.game);
   const team = teamById(me.team_id);
   const section = sectionById(me.section_id);
   const active = data.members.filter((m) => m.status === 'active');
@@ -70,6 +72,27 @@ export default function GameTab() {
         </Card>
       )}
 
+      {medic && (
+        <>
+          <Label>Medic rules · {medic.name}</Label>
+          <Card>
+            {medic.hits.map((h, i) => (
+              <View key={i} style={{ gap: 2 }}>
+                <Text style={styles.wound}>{h.name}</Text>
+                {!!h.instruction && <Text style={styles.role}>{h.instruction}</Text>}
+                <Text style={styles.role}>
+                  {i === medic.hits.length - 1 ? 'Brought back by' : 'Treated by'} {helperText(h.helpers).toLowerCase()}
+                </Text>
+              </View>
+            ))}
+            <Text style={styles.role}>
+              Bleed-out {medic.bleed_minutes} min · {EXPIRY_LABEL[medic.expiry].toLowerCase()}. Tap I’m hit on the Map
+              when you’re hit.
+            </Text>
+          </Card>
+        </>
+      )}
+
       {team && (
         <>
           <Label>{section ? `${section.name} section` : `${team.name} team`}</Label>
@@ -96,6 +119,7 @@ const styles = StyleSheet.create({
     backgroundColor: colours.surface,
   },
   assignmentText: { fontFamily: fonts.semibold, fontSize: 15 },
+  wound: { color: colours.text, fontFamily: fonts.semibold, fontSize: 15 },
   role: { color: colours.textSecondary, fontFamily: fonts.regular, fontSize: 14 },
   kicker: {
     color: colours.accent,

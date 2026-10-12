@@ -23,6 +23,19 @@ export default function Hosting() {
         <Ionicons name="chevron-forward" size={18} color={colours.textSecondary} />
       </Pressable>
 
+      <Pressable
+        onPress={() => router.push('/medic')}
+        accessibilityRole="button"
+        style={({ pressed }) => [styles.row, pressed && { opacity: 0.6 }]}
+      >
+        <Ionicons name="medkit-outline" size={20} color={colours.accent} />
+        <View style={{ flex: 1 }}>
+          <Text style={styles.title}>Medic rules</Text>
+          <Text style={styles.meta}>Wounds, who can treat them and bleed-out</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={18} color={colours.textSecondary} />
+      </Pressable>
+
       <Button title="Host a game day" onPress={() => router.push('/create')} />
     </Screen>
   );

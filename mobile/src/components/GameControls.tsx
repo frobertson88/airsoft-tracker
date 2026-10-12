@@ -15,6 +15,7 @@ import {
   type GameMode,
   type KothSettings,
 } from '../lib/game';
+import { BLEED_CHOICES, helperText, settingsFor, useMedicRulesets, type MedicSettings } from '../lib/medic';
 import { supabase } from '../lib/supabase';
 import { colours, fonts, space } from '../theme';
 import { GameClock } from './GameClock';
@@ -65,7 +66,8 @@ const configOf = (g: Pick<Game, 'name' | 'length_seconds' | 'countdown_seconds' 
   length_seconds: g.length_seconds,
   countdown_seconds: g.countdown_seconds,
   mode: g.mode,
-  settings: g.settings,
+  // Saved games and setups leave medic out when it was off.
+  settings: { medic: null, ...g.settings },
 });
 
 interface SavedSetup extends GameConfig {
@@ -89,6 +91,7 @@ function GameSetup({ game, onDone }: { game: Game | null; onDone?: () => void })
   const { id, data } = useDay();
   const { run, busy, error, setError } = useCommand();
   const saved = useSavedSetups();
+  const medicSets = useMedicRulesets();
   const currentTeams = data?.day.team_count ?? 2;
   const editing = game?.state === 'ready';
   const [c, setC] = useState<GameConfig>(() =>
@@ -106,10 +109,21 @@ function GameSetup({ game, onDone }: { game: Game | null; onDone?: () => void })
     setC((prev) => ({ ...prev, ...patch }));
   };
   const setKoth = (patch: Partial<KothSettings>) => set({ settings: { ...koth, ...patch } });
+  // Medic rules: undefined means not chosen yet, so a new game uses your default set.
+  const medic: MedicSettings | null =
+    c.settings.medic === undefined
+      ? medicSets.preferred
+        ? settingsFor(medicSets.preferred)
+        : null
+      : c.settings.medic;
+  const setMedic = (m: MedicSettings | null) => set({ settings: { ...c.settings, medic: m } });
+  // A game whose rules no longer match a saved set (renamed or deleted) keeps its own chip.
+  const medicMissing = !!medic && !medicSets.sets?.some((x) => x.name === medic.name);
+  const withMedic = (settings: Partial<KothSettings>) => ({ ...settings, team_count: teamCount, medic });
 
   const save = async () => {
     if (!c.name.trim()) return setError('Give the game a name.');
-    const config = { ...c, name: c.name.trim(), settings: { ...c.settings, team_count: teamCount } };
+    const config = { ...c, name: c.name.trim(), settings: withMedic(c.settings) };
     const ok = await run(async () => {
       if (teamCount !== currentTeams || fillChoice !== 'keep') await api.arrangeTeams(id, teamCount, fillChoice);
       await (editing ? api.updateGame(game.id, config) : api.createGame(id, config));
@@ -126,7 +140,7 @@ function GameSetup({ game, onDone }: { game: Game | null; onDone?: () => void })
       newId = await api.saveGameSetup(same ? same.id : null, {
         ...c,
         name: c.name.trim(),
-        settings: { ...c.settings, team_count: teamCount },
+        settings: withMedic(c.settings),
       });
     });
     if (ok) {
@@ -176,7 +190,9 @@ function GameSetup({ game, onDone }: { game: Game | null; onDone?: () => void })
             key={m}
             label={MODE_LABEL[m]}
             selected={c.mode === m}
-            onPress={() => set({ mode: m, settings: m === 'koth' ? { ...KOTH_DEFAULTS } : {} })}
+            onPress={() =>
+              set({ mode: m, settings: { ...(m === 'koth' ? KOTH_DEFAULTS : {}), medic: c.settings.medic } })
+            }
           />
         ))}
       </Row>
@@ -259,6 +275,46 @@ function GameSetup({ game, onDone }: { game: Game | null; onDone?: () => void })
             />
           </View>
         </>
+      )}
+
+      <Text style={styles.small}>Medic rules</Text>
+      <Row style={styles.wrap}>
+        <Chip label="Off" selected={!medic} onPress={() => setMedic(null)} />
+        {medicMissing && <Chip label={medic.name} selected />}
+        {medicSets.sets?.map((x) => (
+          <Chip
+            key={x.id}
+            label={x.name}
+            selected={!!medic && medic.name === x.name}
+            onPress={() => setMedic(settingsFor(x, medic?.bleed_minutes ?? 10))}
+          />
+        ))}
+      </Row>
+      {medic ? (
+        <>
+          <Text style={styles.help}>
+            {medic.hits.map((h) => `${h.name}: ${helperText(h.helpers).toLowerCase()}`).join(' · ')}
+          </Text>
+          <Text style={styles.small}>Bleed-out</Text>
+          <Row style={styles.wrap}>
+            {BLEED_CHOICES.map((m) => (
+              <Chip
+                key={m}
+                label={`${m} min`}
+                selected={medic.bleed_minutes === m}
+                onPress={() => setMedic({ ...medic, bleed_minutes: m })}
+              />
+            ))}
+          </Row>
+          <Text style={styles.help}>
+            {medic.expiry === 'dead'
+              ? 'An untreated wound becomes dead when bleed-out runs out.'
+              : 'An untreated player waits for help when bleed-out runs out.'}{' '}
+            Change the sets in Home, Medic rules.
+          </Text>
+        </>
+      ) : (
+        <Text style={styles.help}>No I’m hit button or scanning this game.</Text>
       )}
 
       <Button title={editing ? 'Save settings' : 'Set up game'} busy={busy} onPress={save} />

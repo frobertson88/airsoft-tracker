@@ -5,6 +5,7 @@ import type { Coord, FieldData } from './field';
 import type { GameMode, KothSettings } from './game';
 import type { TeamColour } from '../theme';
 import type { Affiliation, MapObjectKind, Target } from './mapTools';
+import type { MedicRules, MyMedic, ScanResult } from './medic';
 import type { DayRole, OpenDay } from './types';
 
 /** How arrange_teams fills teams: keep players, deal them out at random, or everyone picks again. */
@@ -76,6 +77,17 @@ const MESSAGES: Record<string, string> = {
   hill_spot_invalid: 'The hill must fit inside the boundary, clear of No-go and Danger areas. Pick another spot.',
   setup_not_found: 'That saved setup no longer exists.',
   too_many_setups: 'You have 50 saved setups. Delete one first.',
+  medic_off: 'Medic rules are off for this game.',
+  medic_self: 'That’s your own code. Ask a teammate to scan it.',
+  medic_code_invalid: 'That code is out of date. Ask the player to show their code again.',
+  medic_not_allowed: 'You can’t treat this wound.',
+  medic_not_hurt: 'That player is already back in play.',
+  medic_reason_required: 'Give a reason for undoing the hit.',
+  medic_nothing_to_undo: 'That player has no hit to undo.',
+  medic_rules_invalid: 'Each hit needs a name and at least one person who can help.',
+  medic_name_invalid: 'Give the rules a name (40 characters at most).',
+  too_many_rulesets: 'You have 50 medic rule sets. Delete one first.',
+  ruleset_not_found: 'Those medic rules no longer exist.',
 };
 
 export class ApiError extends Error {
@@ -215,6 +227,20 @@ export const api = {
   playAgain: (game: string) => rpc<string>('play_again', { p_game: game }),
   tickGame: (game: string) => rpc('tick_game', { p_game: game }),
   serverNow: () => rpc<string>('server_now'),
+  // Medic
+  saveMedicRuleset: (ruleset: string | null, name: string, rules: MedicRules) =>
+    rpc<string>('save_medic_ruleset', { p_id: ruleset, p_name: name, p_rules: rules }),
+  deleteMedicRuleset: (ruleset: string) => rpc('delete_medic_ruleset', { p_id: ruleset }),
+  setDefaultMedicRuleset: (ruleset: string | null) => rpc('set_default_medic_ruleset', { p_id: ruleset }),
+  reportHit: (game: string) => rpc<MyMedic>('report_hit', { p_game: game }),
+  myMedicStatus: (game: string) => rpc<MyMedic>('my_medic_status', { p_game: game }),
+  medicTick: (game: string) => rpc('medic_tick', { p_game: game }),
+  scanPlayer: (game: string, user: string, code: string) =>
+    rpc<ScanResult>('scan_player', { p_game: game, p_user: user, p_code: code }),
+  treatPlayer: (game: string, user: string, code: string) =>
+    rpc('treat_player', { p_game: game, p_user: user, p_code: code }),
+  undoHit: (game: string, user: string, reason: string) =>
+    rpc('undo_hit', { p_game: game, p_user: user, p_reason: reason }),
   reportPosition: (day: string, lat: number, lng: number, accuracy: number | null, recordedAt: string) =>
     rpc('report_position', {
       p_day: day,

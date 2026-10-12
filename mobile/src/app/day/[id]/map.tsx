@@ -8,12 +8,14 @@ import { useMemo, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { FieldMap, type FieldMapHandle, type MapHill, type MapPlayer } from '../../../components/FieldMap';
 import { useMapTools } from '../../../components/MapTools';
+import { MedicOverlay } from '../../../components/MedicPlay';
 import { Body, Button, Screen } from '../../../components/ui';
 import { api, friendlyError } from '../../../lib/api';
 import type { Coord } from '../../../lib/field';
 import { useDay } from '../../../lib/day';
 import { clockFor, kothSettings, useServerNow } from '../../../lib/game';
 import { useMapObjects } from '../../../lib/mapTools';
+import { statusLabel, useMedic } from '../../../lib/medic';
 import { ageLabel, HIDDEN_MS, STALE_MS, usePositions } from '../../../lib/positions';
 import { TRACKING_LABEL, useTracking } from '../../../lib/tracking';
 import { colours, fonts, radius, space, teamColour } from '../../../theme';
@@ -43,9 +45,16 @@ export default function MapTab() {
     hasHill: !!data?.koth,
   });
   const showTools = Platform.OS !== 'web';
+  const medicPlay = useMedic(data?.game ?? null);
+  const { statuses, medic } = medicPlay;
 
   const players = useMemo<MapPlayer[]>(() => {
     if (!data) return [];
+    // Hit teammates show their status next to their name.
+    const hurtLabel = (user: string) => {
+      const st = statuses[user];
+      return st && st.status !== 'in_play' ? statusLabel(st, medic) : null;
+    };
     const out: MapPlayer[] = [];
     for (const p of Object.values(positions)) {
       if (p.user_id === me?.user_id) continue; // the map's own blue dot shows you
@@ -59,13 +68,13 @@ export default function MapTab() {
         id: p.user_id,
         lat: p.lat,
         lng: p.lng,
-        label: [callsign(p.user_id), section?.name].filter(Boolean).join(' · '),
+        label: [callsign(p.user_id), section?.name, hurtLabel(p.user_id)].filter(Boolean).join(' · '),
         colour: team ? teamColour(team.colour) : colours.text,
         stale: age > STALE_MS ? ageLabel(age) : undefined,
       });
     }
     return out;
-  }, [data, positions, now, me, callsign, teamById, sectionById]);
+  }, [data, positions, now, me, callsign, teamById, sectionById, statuses, medic]);
 
   // The King of the Hill circle while that game is on (not once it has finished).
   const hill = useMemo<MapHill | null>(() => {
@@ -168,11 +177,30 @@ export default function MapTab() {
           </View>
         </View>
       )}
-      {tracking.status !== 'sharing' && !hillSpot && !(showTools && tools.strip) && (
-        <Pressable onPress={tracking.retry} style={styles.trackingBar} accessibilityRole="button">
-          <Text style={styles.trackingText}>{TRACKING_LABEL[tracking.status]}</Text>
-        </Pressable>
-      )}
+      {(() => {
+        const trackingBar = tracking.status !== 'sharing' && (
+          <Pressable onPress={tracking.retry} style={styles.trackingBar} accessibilityRole="button">
+            <Text style={styles.trackingText}>{TRACKING_LABEL[tracking.status]}</Text>
+          </Pressable>
+        );
+        const hideBottom = !!hillSpot || (showTools && !!tools.strip);
+        if (data.game && medic && me) {
+          return (
+            <MedicOverlay
+              game={data.game}
+              medic={medic}
+              mine={medicPlay.mine}
+              myId={me.user_id}
+              canPlay={!!me.team_id}
+              hideBottom={hideBottom}
+              bottomExtra={trackingBar}
+              onHit={medicPlay.setMine}
+              reload={medicPlay.reload}
+            />
+          );
+        }
+        return !hideBottom && trackingBar ? <View style={styles.bottom}>{trackingBar}</View> : null;
+      })()}
       <View style={styles.fabs}>
         {hill && (
           <Pressable
@@ -212,11 +240,8 @@ const styles = StyleSheet.create({
   moveRow: { flexDirection: 'row', gap: space.sm },
   tools: { position: 'absolute', top: space.sm, left: space.sm, flexDirection: 'row', alignItems: 'flex-start', gap: space.xs },
   strip: { position: 'absolute', left: 64, right: 72, bottom: space.md },
+  bottom: { position: 'absolute', left: space.sm, right: 72, bottom: space.md },
   trackingBar: {
-    position: 'absolute',
-    left: space.sm,
-    right: 72,
-    bottom: space.md,
     backgroundColor: 'rgba(11,16,12,0.9)',
     borderColor: colours.danger,
     borderWidth: 1,

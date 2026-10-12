@@ -84,6 +84,8 @@ export default function Home() {
         <KitRow icon="time-outline" title="History" meta="Game days you've played" href="/history" />
         <View style={styles.divider} />
         <KitRow icon="flag-outline" title="Hosting" meta="Fields and hosting a game day" href="/hosting" />
+        <View style={styles.divider} />
+        <KitRow icon="medkit-outline" title="Medic rules" meta="Wounds and who can treat them" href="/medic" />
       </View>
     </Screen>
   );

@@ -31,6 +31,13 @@
         {
           "locationWhenInUsePermission": "Your location is shared with your team during Game Days."
         }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "The camera scans a hit player's code so you can treat them.",
+          "recordAudioAndroid": false
+        }
       ]
     ],
     "scheme": "airsofttracker",
