@@ -1,3 +1,5 @@
+import type { TeamColour } from '../theme';
+
 export const DAY_ROLES = [
   'Rifleman',
   'Machine Gunner',
@@ -34,7 +36,7 @@ export interface Team {
   id: string;
   game_day_id: string;
   name: string;
-  colour: 'blue' | 'red' | 'yellow' | 'purple';
+  colour: TeamColour;
   sort_order: number;
   /** Teams beyond the day's team count are kept for history but not used. */
   active: boolean;

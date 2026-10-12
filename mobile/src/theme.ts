@@ -16,9 +16,13 @@ export const colours = {
   red: '#F09E92',
   yellow: '#F2DE6B',
   purple: '#C3A6F5',
+  teal: '#7FD6C8',
+  pink: '#F5A8D2',
+  white: '#F4F4EF',
 };
 
-export type TeamColour = 'blue' | 'red' | 'yellow' | 'purple';
+export const TEAM_COLOURS = ['blue', 'red', 'yellow', 'purple', 'teal', 'pink', 'white'] as const;
+export type TeamColour = (typeof TEAM_COLOURS)[number];
 
 export const teamColour = (colour: TeamColour) => colours[colour];
 

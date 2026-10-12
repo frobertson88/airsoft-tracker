@@ -3,6 +3,7 @@
 import { supabase } from './supabase';
 import type { FieldData } from './field';
 import type { GameMode, KothSettings } from './game';
+import type { TeamColour } from '../theme';
 import type { DayRole, OpenDay } from './types';
 
 /** How arrange_teams fills teams: keep players, deal them out at random, or everyone picks again. */
@@ -56,6 +57,7 @@ const MESSAGES: Record<string, string> = {
   game_settings_invalid: 'Check the game settings and try again.',
   koth_no_space: 'The hill doesn’t fit on this field clear of No-go and Danger areas. Try a smaller hill.',
   team_count_invalid: 'Pick 2, 3 or 4 teams.',
+  team_colour_invalid: 'Pick one of the team colours.',
   team_fill_invalid: 'Choose how to fill the teams.',
   game_running: 'Finish the current game before changing teams.',
   team_locked: 'Teams are locked while a game is running. Ask an admin to move you.',
@@ -105,6 +107,7 @@ export const api = {
     rpc('set_section_leader', { p_section: section, p_user: user }),
   // Admin
   renameTeam: (team: string, name: string) => rpc('rename_team', { p_team: team, p_name: name }),
+  setTeamColour: (team: string, colour: TeamColour) => rpc('set_team_colour', { p_team: team, p_colour: colour }),
   setAssignment: (
     day: string,
     user: string,

@@ -21,7 +21,9 @@ import {
 import { api } from '../../../lib/api';
 import { useCommand, useDay } from '../../../lib/day';
 import type { DayMember, Section, Team } from '../../../lib/types';
-import { colours, display, fonts, radius, space, teamColour } from '../../../theme';
+import { colours, display, fonts, radius, space, TEAM_COLOURS, teamColour, type TeamColour } from '../../../theme';
+
+const label = (c: string) => c[0].toUpperCase() + c.slice(1);
 
 function Fold({
   title,
@@ -128,9 +130,26 @@ function TeamBlock({
   const { data, me, isAdmin } = useDay();
   const { run, busy, error } = useCommand();
   const [open, setOpen] = useState(mine);
-  const [renaming, setRenaming] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [name, setName] = useState(team.name);
+  const [colour, setColour] = useState<TeamColour>(team.colour);
   if (!data || !me) return null;
+
+  // Picking a colour another team has swaps the two.
+  const swapWith = colour !== team.colour ? data.allTeams.find((t) => t.colour === colour) : undefined;
+  const changed = (name.trim() && name.trim() !== team.name) || colour !== team.colour;
+  const startEdit = () => {
+    setName(team.name);
+    setColour(team.colour);
+    setEditing(true);
+  };
+  const save = async () => {
+    const ok = await run(async () => {
+      if (colour !== team.colour) await api.setTeamColour(team.id, colour);
+      if (name.trim() && name.trim() !== team.name) await api.renameTeam(team.id, name.trim());
+    });
+    if (ok) setEditing(false);
+  };
 
   const members = data.members.filter((m) => m.status === 'active' && m.team_id === team.id);
   // Your own section first.
@@ -149,34 +168,39 @@ function TeamBlock({
         open={open}
         onToggle={() => setOpen(!open)}
       >
-        {isAdmin && !renaming && (
-          <Pressable onPress={() => setRenaming(true)} accessibilityRole="button" style={styles.rename}>
-            <Text style={styles.renameText}>Rename team</Text>
+        {isAdmin && !editing && (
+          <Pressable onPress={startEdit} accessibilityRole="button" style={styles.rename}>
+            <Text style={styles.renameText}>Edit name and colour</Text>
           </Pressable>
         )}
-        {renaming && (
-          <>
-            <Field value={name} onChangeText={setName} maxLength={24} autoFocus />
+        {editing && (
+          <View style={styles.editor}>
+            <Field value={name} onChangeText={setName} maxLength={24} placeholder="Team name" />
+            <View style={styles.swatches}>
+              {TEAM_COLOURS.map((c) => (
+                <Pressable
+                  key={c}
+                  onPress={() => {
+                    // A name that is just the colour follows the colour.
+                    if (name.trim() === label(colour)) setName(label(c));
+                    setColour(c);
+                  }}
+                  accessibilityRole="radio"
+                  accessibilityLabel={c}
+                  accessibilityState={{ selected: c === colour }}
+                  style={[styles.swatch, { backgroundColor: teamColour(c) }, c === colour && styles.swatchOn]}
+                >
+                  {c === colour && <Ionicons name="checkmark" size={20} color={colours.onAccent} />}
+                </Pressable>
+              ))}
+            </View>
+            {swapWith && <Body muted>{`${swapWith.name} will take ${team.name}'s colour.`}</Body>}
             <Row>
-              <Button
-                title="Save"
-                busy={busy}
-                disabled={!name.trim() || name.trim() === team.name}
-                onPress={async () => {
-                  if (await run(() => api.renameTeam(team.id, name.trim()))) setRenaming(false);
-                }}
-              />
-              <Button
-                title="Cancel"
-                variant="secondary"
-                onPress={() => {
-                  setName(team.name);
-                  setRenaming(false);
-                }}
-              />
+              <Button title="Save" busy={busy} disabled={!changed} onPress={save} />
+              <Button title="Cancel" variant="secondary" onPress={() => setEditing(false)} />
             </Row>
             <ErrorText>{error}</ErrorText>
-          </>
+          </View>
         )}
 
         {sections.map((s) => (
@@ -313,4 +337,16 @@ const styles = StyleSheet.create({
   sectionMine: { borderColor: colours.accent },
   rename: { minHeight: 36, justifyContent: 'center' },
   renameText: { color: colours.accent, fontFamily: fonts.medium, fontSize: 15 },
+  editor: { gap: space.sm },
+  swatches: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
+  swatch: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  swatchOn: { borderColor: colours.text },
 });
