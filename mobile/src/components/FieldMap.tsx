@@ -2,7 +2,7 @@
 // an optional shape being drawn. The web build uses FieldMap.web.tsx instead.
 import Ionicons from '@expo/vector-icons/Ionicons';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { forwardRef, useImperativeHandle, useRef } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import MapView, { Circle, Marker, Polygon, Polyline, type Region } from 'react-native-maps';
 import {
@@ -125,6 +125,8 @@ export const FieldMap = forwardRef<FieldMapHandle, FieldMapProps>(function Field
   ref,
 ) {
   const map = useRef<MapView>(null);
+  // Tapping a drawing can also reach the map's own onPress; ignore that echo.
+  const lastDrawingPress = useRef(0);
   useImperativeHandle(ref, () => ({
     goTo: (view) => map.current?.animateToRegion(toRegion(view), 400),
     fit: () => {
@@ -145,7 +147,16 @@ export const FieldMap = forwardRef<FieldMapHandle, FieldMapProps>(function Field
       showsCompass
       rotateEnabled={false}
       toolbarEnabled={false}
-      onPress={onPress ? (e) => onPress({ lat: e.nativeEvent.coordinate.latitude, lng: e.nativeEvent.coordinate.longitude }) : undefined}
+      onPress={
+        onPress
+          ? (e) => {
+              const action = (e.nativeEvent as { action?: string }).action;
+              if (action === 'marker-press' || action === 'polyline-press' || action === 'polygon-press') return;
+              if (Date.now() - lastDrawingPress.current < 400) return;
+              onPress({ lat: e.nativeEvent.coordinate.latitude, lng: e.nativeEvent.coordinate.longitude });
+            }
+          : undefined
+      }
       onLongPress={
         onLongPress
           ? (e) => onLongPress({ lat: e.nativeEvent.coordinate.latitude, lng: e.nativeEvent.coordinate.longitude })
@@ -259,7 +270,14 @@ export const FieldMap = forwardRef<FieldMapHandle, FieldMapProps>(function Field
           key={d.id}
           d={d}
           selected={d.id === selectedId}
-          onPress={onDrawingPress ? () => onDrawingPress(d.id) : undefined}
+          onPress={
+            onDrawingPress
+              ? () => {
+                  lastDrawingPress.current = Date.now();
+                  onDrawingPress(d.id);
+                }
+              : undefined
+          }
           onMove={onDrawingMove ? (pts) => onDrawingMove(d.id, pts) : undefined}
         />
       ))}
@@ -356,6 +374,13 @@ function Drawing({
 }) {
   const dash = d.enemy ? [8, 6] : undefined;
   const look = `${d.colour}-${d.age ?? ''}-${d.label ?? ''}-${selected}`;
+  // Let a custom marker paint before freezing it, or Android can show it late or blank.
+  const [painted, setPainted] = useState('');
+  const painting = painted !== look;
+  useEffect(() => {
+    const t = setTimeout(() => setPainted(look), 600);
+    return () => clearTimeout(t);
+  }, [look]);
   const drag = d.movable && onMove;
   // Corner handles to reshape a selected line or area.
   const handles =
@@ -371,7 +396,7 @@ function Drawing({
               next[i] = { lat: e.nativeEvent.coordinate.latitude, lng: e.nativeEvent.coordinate.longitude };
               onMove(next);
             }}
-            tracksViewChanges={false}
+            tracksViewChanges={painting}
             zIndex={30}
           >
             <View style={[styles.handle, { borderColor: d.colour }]} />
@@ -388,7 +413,7 @@ function Drawing({
         draggable={!!drag}
         onDragEnd={drag ? (e) => onMove([{ lat: e.nativeEvent.coordinate.latitude, lng: e.nativeEvent.coordinate.longitude }]) : undefined}
         onPress={onPress}
-        tracksViewChanges={false}
+        tracksViewChanges={painting}
         zIndex={12}
       >
         {d.kind === 'marker' ? (
@@ -396,12 +421,12 @@ function Drawing({
             <View
               style={[
                 styles.markerFrame,
-                { borderColor: d.colour, borderStyle: d.enemy ? 'dashed' : 'solid' },
+                { backgroundColor: d.colour, borderStyle: d.enemy ? 'dashed' : 'solid' },
                 selected && styles.markerSelected,
               ]}
             >
-              <MaterialCommunityIcons name={(d.icon ?? 'account') as never} size={18} color={d.colour} />
-              <View style={[styles.badge, { backgroundColor: d.enemy ? colours.danger : d.colour }]}>
+              <MaterialCommunityIcons name={(d.icon ?? 'account') as never} size={20} color={colours.onAccent} />
+              <View style={[styles.badge, { borderColor: d.colour }]}>
                 <Text style={styles.badgeText}>{d.enemy ? 'E' : 'F'}</Text>
               </View>
             </View>
@@ -412,8 +437,8 @@ function Drawing({
             )}
           </View>
         ) : (
-          <View style={[styles.labelBox, { borderColor: d.colour }, selected && styles.markerSelected]}>
-            <Text style={[styles.labelText, { color: d.colour }]} numberOfLines={2}>
+          <View style={[styles.labelBox, { backgroundColor: d.colour }, selected && styles.markerSelected]}>
+            <Text style={styles.labelText} numberOfLines={2}>
               {d.label}
             </Text>
           </View>
@@ -430,7 +455,7 @@ function Drawing({
         <Polygon
           coordinates={coords}
           strokeColor={d.colour}
-          fillColor={fade(d.colour, selected ? 0.3 : 0.15)}
+          fillColor={fade(d.colour, selected ? 0.45 : 0.3)}
           strokeWidth={selected ? 4 : 2}
           lineDashPattern={dash}
           tappable
@@ -462,11 +487,11 @@ function Drawing({
             coordinate={toLatLng(c)}
             anchor={{ x: 0.5, y: 0.5 }}
             onPress={onPress}
-            tracksViewChanges={false}
+            tracksViewChanges={painting}
             zIndex={11}
           >
-            <View style={[styles.waypoint, { borderColor: d.colour, borderStyle: d.enemy ? 'dashed' : 'solid' }]}>
-              <Text style={styles.waypointText}>{i + 1}</Text>
+            <View style={[styles.waypoint, { backgroundColor: d.colour, borderStyle: d.enemy ? 'dashed' : 'solid' }]}>
+              <Text style={[styles.waypointText, { color: colours.onAccent }]}>{i + 1}</Text>
             </View>
           </Marker>
         ))}
@@ -476,10 +501,10 @@ function Drawing({
           coordinate={toLatLng(d.kind === 'area' ? centroid(d.points) : d.points[d.points.length - 1])}
           anchor={{ x: 0.5, y: d.kind === 'area' ? 0.5 : -0.3 }}
           onPress={onPress}
-          tracksViewChanges={false}
+          tracksViewChanges={painting}
           zIndex={11}
         >
-          <Text style={styles.markerCaption}>{d.label}</Text>
+          <Text style={[styles.markerCaption, { backgroundColor: d.colour, color: colours.onAccent }]}>{d.label}</Text>
         </Marker>
       )}
       {handles}
@@ -552,11 +577,11 @@ const styles = StyleSheet.create({
     height: 34,
     borderRadius: 8,
     borderWidth: 2,
-    backgroundColor: 'rgba(11,16,12,0.85)',
+    borderColor: colours.background,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  markerSelected: { borderWidth: 3, transform: [{ scale: 1.15 }] },
+  markerSelected: { borderWidth: 3, borderColor: colours.text, transform: [{ scale: 1.15 }] },
   badge: {
     position: 'absolute',
     right: -6,
@@ -564,10 +589,12 @@ const styles = StyleSheet.create({
     width: 15,
     height: 15,
     borderRadius: 8,
+    borderWidth: 1,
+    backgroundColor: colours.background,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  badgeText: { color: colours.onAccent, fontFamily: fonts.semibold, fontSize: 9 },
+  badgeText: { color: colours.text, fontFamily: fonts.semibold, fontSize: 9 },
   markerCaption: {
     color: colours.text,
     fontFamily: fonts.medium,
@@ -578,19 +605,20 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   labelBox: {
-    backgroundColor: 'rgba(11,16,12,0.85)',
+    borderColor: colours.background,
     borderWidth: 1,
     borderRadius: 6,
     paddingHorizontal: space.sm,
     paddingVertical: 2,
     maxWidth: 180,
   },
-  labelText: { fontFamily: fonts.semibold, fontSize: 13 },
+  labelText: { color: colours.onAccent, fontFamily: fonts.semibold, fontSize: 13 },
   waypoint: {
     width: 22,
     height: 22,
     borderRadius: 11,
     borderWidth: 2,
+    borderColor: colours.background,
     backgroundColor: 'rgba(11,16,12,0.9)',
     alignItems: 'center',
     justifyContent: 'center',

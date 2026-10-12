@@ -12,6 +12,8 @@ export const colours = {
   actionText: '#D9E7C9',
   // Orange means danger only; it is never a team colour.
   danger: '#FF9F45',
+  // Enemy drawings on the map (a stronger red than the Red team).
+  enemy: '#E5484D',
   blue: '#8EBBEF',
   red: '#F09E92',
   yellow: '#F2DE6B',

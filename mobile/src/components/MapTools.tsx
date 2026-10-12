@@ -108,6 +108,7 @@ export function useMapTools({
 
   // The colour new drawings get: the audience's team in Host view, else your team.
   const draftColour = (() => {
+    if (affiliation === 'enemy') return colours.enemy;
     const teamId = hostView ? target?.team_id : myTeam;
     const team = teamById(teamId ?? null);
     return team ? teamColour(team.colour) : colours.text;
@@ -127,11 +128,11 @@ export function useMapTools({
             icon: o.kind === 'marker' ? markerType(o.marker_type).icon : undefined,
             label: o.label,
             points: o.points,
-            colour: team ? teamColour(team.colour) : colours.text,
+            colour: o.affiliation === 'enemy' ? colours.enemy : team ? teamColour(team.colour) : colours.text,
             enemy: o.affiliation === 'enemy',
             age: o.affiliation === 'enemy' ? sightingAge(now - Date.parse(o.created_at)) : undefined,
             linked: o.linked,
-            movable: tool.type === 'cursor' && canChange(o),
+            movable: tool.type === 'cursor' && canChange(o) && !o.id.startsWith('tmp-'),
           };
         }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -165,8 +166,32 @@ export function useMapTools({
       setMessage(myTeam || hostView ? 'Pick who sees it first.' : 'Pick a team on the Squad tab before drawing.');
       return false;
     }
-    return run(() =>
-      api.placeMapObject(dayId, {
+    // Show it straight away; swap in the saved one when the server answers.
+    const tmp = `tmp-${Date.now()}-${Math.random()}`;
+    const stamp = new Date(now).toISOString();
+    setObjects((prev) => [
+      ...prev,
+      {
+        id: tmp,
+        game_day_id: dayId,
+        kind,
+        marker_type: extra.marker_type ?? null,
+        affiliation,
+        audience: target.audience,
+        team_id: target.team_id,
+        section_id: target.section_id,
+        colour_team_id: hostView ? target.team_id : myTeam,
+        label: extra.label ?? null,
+        points,
+        linked,
+        created_by: me?.user_id ?? '',
+        created_at: stamp,
+        updated_at: stamp,
+      },
+    ]);
+    let saved = '';
+    const ok = await run(async () => {
+      saved = await api.placeMapObject(dayId, {
         kind,
         marker_type: extra.marker_type,
         affiliation,
@@ -174,8 +199,14 @@ export function useMapTools({
         label: extra.label ?? null,
         points,
         linked,
-      }),
+      });
+    });
+    setObjects((prev) =>
+      !ok || prev.some((o) => o.id === saved)
+        ? prev.filter((o) => o.id !== tmp)
+        : prev.map((o) => (o.id === tmp ? { ...o, id: saved } : o)),
     );
+    return ok;
   };
 
   // Which markers a Delete boundary covers (only ones you may delete count).
@@ -240,6 +271,12 @@ export function useMapTools({
   };
 
   const onDrawingPress = (id: string) => {
+    // In Delete, tapping one drawing (before drawing a boundary) picks just that one.
+    if (tool.type === 'delete' && draft.length === 0) {
+      reset({ type: 'cursor' });
+      setSelectedId(id);
+      return;
+    }
     if (tool.type !== 'cursor') return;
     setPalette(null);
     setSelectedId(id === selectedId ? null : id);
@@ -276,7 +313,9 @@ export function useMapTools({
   const hint = (() => {
     if (tool.type === 'marker') return 'Tap the map to place. Tap again for another.';
     if (tool.type === 'delete')
-      return draft.length < 3 ? 'Tap corners around the markers to delete' : 'Check the highlighted count, then delete';
+      return draft.length < 3
+        ? 'Tap one drawing to delete it, or tap corners around several markers'
+        : 'Check the count, then delete';
     if (tool.type === 'draw') {
       const t = drawTool(tool.kind);
       if (t.kind === 'label') return draft.length ? 'Type the label, then Place' : t.hint;
@@ -317,7 +356,7 @@ export function useMapTools({
     run(() => api.setMapHostView(dayId, on));
   };
 
-  const affColour = affiliation === 'enemy' ? colours.danger : colours.accent;
+  const affColour = affiliation === 'enemy' ? colours.enemy : colours.accent;
 
   const rail = (
     <View style={styles.rail}>
