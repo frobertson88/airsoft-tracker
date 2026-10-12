@@ -1,9 +1,10 @@
 // Thin wrappers over the backend command functions (supabase/migrations).
 // Every gameplay/membership change goes through these; screens never write tables.
 import { supabase } from './supabase';
-import type { FieldData } from './field';
+import type { Coord, FieldData } from './field';
 import type { GameMode, KothSettings } from './game';
 import type { TeamColour } from '../theme';
+import type { Affiliation, MapObjectKind, Target } from './mapTools';
 import type { DayRole, OpenDay } from './types';
 
 /** How arrange_teams fills teams: keep players, deal them out at random, or everyone picks again. */
@@ -58,6 +59,15 @@ const MESSAGES: Record<string, string> = {
   koth_no_space: 'The hill doesn’t fit on this field clear of No-go and Danger areas. Try a smaller hill.',
   team_count_invalid: 'Pick 2, 3 or 4 teams.',
   team_colour_invalid: 'Pick one of the team colours.',
+  map_kind_invalid: 'That marker can’t be used here.',
+  map_label_required: 'Type the label first.',
+  map_label_invalid: 'Keep labels to 40 characters.',
+  map_points_invalid: 'That drawing has the wrong number of points.',
+  map_audience_invalid: 'You can’t share that drawing with them.',
+  map_no_team: 'Pick a team before drawing on the map.',
+  map_full: 'The map is full. Delete some drawings first.',
+  map_object_not_found: 'That drawing has already gone.',
+  map_not_allowed: 'Only the person who drew it, or an admin in Host view, can change it.',
   team_fill_invalid: 'Choose how to fill the teams.',
   game_running: 'Finish the current game before changing teams.',
   team_locked: 'Teams are locked while a game is running. Ask an admin to move you.',
@@ -108,6 +118,26 @@ export const api = {
   // Admin
   renameTeam: (team: string, name: string) => rpc('rename_team', { p_team: team, p_name: name }),
   setTeamColour: (team: string, colour: TeamColour) => rpc('set_team_colour', { p_team: team, p_colour: colour }),
+  setMapHostView: (day: string, on: boolean) => rpc('set_map_host_view', { p_day: day, p_on: on }),
+  placeMapObject: (
+    day: string,
+    o: { kind: MapObjectKind; marker_type?: string | null; affiliation: Affiliation; target: Target; label?: string | null; points: Coord[]; linked?: boolean },
+  ) =>
+    rpc<string>('place_map_object', {
+      p_day: day,
+      p_kind: o.kind,
+      p_marker_type: o.marker_type ?? null,
+      p_affiliation: o.affiliation,
+      p_audience: o.target.audience,
+      p_team: o.target.team_id,
+      p_section: o.target.section_id,
+      p_label: o.label ?? null,
+      p_points: o.points.map((c) => ({ lat: c.lat, lng: c.lng })),
+      p_linked: o.linked ?? true,
+    }),
+  moveMapObject: (object: string, points: Coord[]) =>
+    rpc('move_map_object', { p_object: object, p_points: points.map((c) => ({ lat: c.lat, lng: c.lng })) }),
+  deleteMapObjects: (day: string, objects: string[]) => rpc<number>('delete_map_objects', { p_day: day, p_objects: objects }),
   setAssignment: (
     day: string,
     user: string,

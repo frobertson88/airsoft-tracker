@@ -58,6 +58,8 @@ export interface DayMember {
   team_id: string | null;
   section_id: string | null;
   is_admin: boolean;
+  /** Admins only: seeing and changing every team's map drawings. */
+  map_host_view: boolean;
   status: MemberStatus;
   joined_at: string;
 }

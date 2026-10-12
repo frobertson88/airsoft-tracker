@@ -1,16 +1,19 @@
-// Map tab: the day's field, your own position and your team's live positions
-// (docs/field-library.md, docs/location-and-device-operation.md).
+// Map tab: the day's field, your own position, your team's live positions and
+// the map tools for shared drawings (docs/field-library.md,
+// docs/location-and-device-operation.md, docs/map-toolbar.md).
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Location from 'expo-location';
 import { router } from 'expo-router';
 import { useMemo, useRef, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { FieldMap, type FieldMapHandle, type MapHill, type MapPlayer } from '../../../components/FieldMap';
+import { useMapTools } from '../../../components/MapTools';
 import { Body, Button, Screen } from '../../../components/ui';
 import { api, friendlyError } from '../../../lib/api';
 import type { Coord } from '../../../lib/field';
 import { useDay } from '../../../lib/day';
 import { clockFor, kothSettings, useServerNow } from '../../../lib/game';
+import { useMapObjects } from '../../../lib/mapTools';
 import { ageLabel, HIDDEN_MS, STALE_MS, usePositions } from '../../../lib/positions';
 import { TRACKING_LABEL, useTracking } from '../../../lib/tracking';
 import { colours, fonts, radius, space, teamColour } from '../../../theme';
@@ -27,6 +30,12 @@ export default function MapTab() {
   const membersKey = data?.members.map((m) => `${m.user_id}:${m.status}:${m.team_id}`).join(',');
   const positions = usePositions(id, membersKey);
   const now = useServerNow(15000);
+  // Re-read drawings when what you may see changes, or after a failed change.
+  const [mapReloads, setMapReloads] = useState(0);
+  const mapKey = `${me?.team_id}:${me?.section_id}:${me?.is_admin}:${me?.map_host_view}:${mapReloads}`;
+  const { objects, setObjects } = useMapObjects(id, mapKey);
+  const tools = useMapTools({ objects, setObjects, reload: () => setMapReloads((n) => n + 1), now });
+  const showTools = Platform.OS !== 'web';
 
   const players = useMemo<MapPlayer[]>(() => {
     if (!data) return [];
@@ -106,6 +115,12 @@ export default function MapTab() {
   return (
     <View style={styles.screen}>
       <FieldMap ref={mapRef} data={field.data} players={players}
+        drawings={tools.drawings}
+        selectedId={tools.selectedId}
+        onDrawingPress={tools.onDrawingPress}
+        onDrawingMove={tools.onDrawingMove}
+        toolDraft={tools.toolDraft}
+        onPress={showTools ? tools.onMapPress : undefined}
         hill={
           hillSpot && hill
             ? { ...hill, lat: hillSpot.lat, lng: hillSpot.lng, colour: colours.accent, label: 'Move here?' }
@@ -125,6 +140,21 @@ export default function MapTab() {
           <Text style={styles.legendText}>Danger</Text>
         </View>
       </View>
+      {showTools && (
+        <View style={styles.tools} pointerEvents="box-none">
+          {tools.rail}
+          {tools.palette}
+        </View>
+      )}
+      {showTools && tools.strip && !hillSpot && (
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'position' : undefined}
+          style={styles.strip}
+          pointerEvents="box-none"
+        >
+          {tools.strip}
+        </KeyboardAvoidingView>
+      )}
       {hillSpot && (
         <View style={styles.moveCard}>
           <Text style={styles.trackingText}>Move the hill here? Players are told it moved.</Text>
@@ -139,7 +169,7 @@ export default function MapTab() {
           </View>
         </View>
       )}
-      {tracking.status !== 'sharing' && !hillSpot && (
+      {tracking.status !== 'sharing' && !hillSpot && !(showTools && tools.strip) && (
         <Pressable onPress={tracking.retry} style={styles.trackingBar} accessibilityRole="button">
           <Text style={styles.trackingText}>{TRACKING_LABEL[tracking.status]}</Text>
         </Pressable>
@@ -199,6 +229,8 @@ const styles = StyleSheet.create({
     gap: space.sm,
   },
   moveRow: { flexDirection: 'row', gap: space.sm },
+  tools: { position: 'absolute', top: 64, left: space.sm, flexDirection: 'row', alignItems: 'flex-start', gap: space.xs },
+  strip: { position: 'absolute', left: 64, right: 72, bottom: space.md },
   trackingBar: {
     position: 'absolute',
     left: space.sm,
