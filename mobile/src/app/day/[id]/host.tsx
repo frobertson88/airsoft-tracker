@@ -12,6 +12,7 @@ import { TrackingSettings } from '../../../components/TrackingSettings';
 import { Body, Button, Card, ConfirmButton, ErrorText, Label, Screen } from '../../../components/ui';
 import { api } from '../../../lib/api';
 import { useCommand, useDay } from '../../../lib/day';
+import { clockFor } from '../../../lib/game';
 import { goHome } from '../../../lib/nav';
 import { colours, display, space, teamColour, fonts } from '../../../theme';
 
@@ -25,6 +26,8 @@ export default function HostTab() {
   const active = data.members.filter((m) => m.status === 'active');
   const incomplete = active.filter((m) => !m.day_role || !m.team_id);
   const counts = data.teams.map((t) => ({ team: t, n: active.filter((m) => m.team_id === t.id).length }));
+  const gameState = data.game ? clockFor(data.game, Date.now()).state : null;
+  const gameRunning = !!gameState && gameState !== 'ready' && gameState !== 'complete';
   const playing = counts.reduce((sum, c) => sum + c.n, 0);
 
   return (
@@ -59,13 +62,28 @@ export default function HostTab() {
         <Button title="Manage players and teams" variant="quiet" onPress={() => router.navigate(`/day/${id}/team`)} />
       </Card>
 
-      {!data.field && (
-        <Card>
-          <Text style={[styles.fieldName, { color: colours.danger }]}>No field yet</Text>
-          <Body muted>Pick one before the first game.</Body>
-          <Button title="Choose field" onPress={() => setPicking(true)} />
-        </Card>
-      )}
+      <Label>Field</Label>
+      <Card>
+        {data.field ? (
+          <View style={styles.between}>
+            <View style={{ flexShrink: 1 }}>
+              <Text style={styles.fieldName}>{data.field.name}</Text>
+              {gameRunning && <Text style={styles.meta}>Change it between games.</Text>}
+            </View>
+            {!gameRunning && (
+              <Pressable onPress={() => setPicking(true)} accessibilityRole="button" hitSlop={8}>
+                <Text style={styles.link}>Change</Text>
+              </Pressable>
+            )}
+          </View>
+        ) : (
+          <>
+            <Text style={[styles.fieldName, { color: colours.danger }]}>No field yet</Text>
+            <Body muted>Pick one before the first game.</Body>
+            <Button title="Choose field" onPress={() => setPicking(true)} />
+          </>
+        )}
+      </Card>
       {picking && <FieldPicker onClose={() => setPicking(false)} />}
 
       <Pressable onPress={() => setSettings(!settings)} accessibilityRole="button" style={styles.fold}>
@@ -106,6 +124,8 @@ const styles = StyleSheet.create({
   counts: { flexDirection: 'row', flexWrap: 'wrap', columnGap: space.lg, rowGap: space.xs },
   count: { fontFamily: fonts.medium, fontSize: 14, fontVariant: ['tabular-nums'] },
   waiting: { color: colours.danger, fontFamily: fonts.regular, fontSize: 14 },
+  link: { color: colours.accent, fontFamily: fonts.semibold, fontSize: 15 },
+  meta: { color: colours.textSecondary, fontFamily: fonts.regular, fontSize: 14 },
   fieldName: { color: colours.text, fontSize: 22, ...display },
   bar: { flexDirection: 'row', height: 8, borderRadius: 4, overflow: 'hidden', gap: 2 },
   fold: {
