@@ -432,9 +432,6 @@ function Drawing({
               ]}
             >
               <MaterialCommunityIcons name={(d.icon ?? 'account') as never} size={20} color={colours.onAccent} />
-              <View style={[styles.badge, { borderColor: d.colour }]}>
-                <Text style={styles.badgeText}>{d.enemy ? 'E' : 'F'}</Text>
-              </View>
             </View>
             {(d.label || d.age) && (
               <Text style={styles.markerCaption} numberOfLines={1}>
@@ -588,19 +585,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   markerSelected: { borderWidth: 3, borderColor: colours.text, transform: [{ scale: 1.15 }] },
-  badge: {
-    position: 'absolute',
-    right: -6,
-    top: -6,
-    width: 15,
-    height: 15,
-    borderRadius: 8,
-    borderWidth: 1,
-    backgroundColor: colours.background,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  badgeText: { color: colours.text, fontFamily: fonts.semibold, fontSize: 9 },
   markerCaption: {
     color: colours.text,
     fontFamily: fonts.medium,
