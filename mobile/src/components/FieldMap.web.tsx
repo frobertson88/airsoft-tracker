@@ -7,7 +7,7 @@ import { colours, fonts, radius, space } from '../theme';
 export type { FieldMapHandle, FieldMapProps } from './FieldMap';
 
 export const FieldMap = forwardRef<FieldMapHandle, FieldMapProps>(function FieldMap({ data, players, hill, drawings, style }, ref) {
-  useImperativeHandle(ref, () => ({ goTo: () => {}, fit: () => {} }));
+  useImperativeHandle(ref, () => ({ goTo: () => {}, fit: () => {}, snapshot: async () => null }));
   return (
     <View style={[styles.box, style]}>
       <Text style={styles.title}>Map shows in the phone app</Text>

@@ -43,6 +43,7 @@ const MESSAGES: Record<string, string> = {
   field_point_invalid: 'Each point needs a label.',
   field_too_big: 'Too many areas or points (50 areas and 100 points at most).',
   field_not_found: 'That field no longer exists.',
+  field_preview_invalid: 'The field picture couldn’t be saved.',
   not_field_owner: 'Only the person who made this field can change it.',
   field_archived: 'That field is archived. Restore it in Fields first.',
   game_not_found: 'That game no longer exists.',
@@ -178,6 +179,8 @@ export const api = {
       p_notes: notes,
       p_data: data,
     }),
+  setFieldPreview: (field: string, preview: string | null) =>
+    rpc('set_field_preview', { p_field: field, p_preview: preview }),
   duplicateField: (field: string) => rpc<string>('duplicate_field', { p_field: field }),
   archiveField: (field: string, archived: boolean) =>
     rpc('archive_field', { p_field: field, p_archived: archived }),

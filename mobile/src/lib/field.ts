@@ -44,6 +44,8 @@ export interface SavedField {
   revision: number;
   archived: boolean;
   updated_at: string;
+  /** A JPEG data URL of the map, taken when the field was last saved on a phone. */
+  preview: string | null;
 }
 
 /** The Game Day's copy of a field, taken when an admin picked it. */

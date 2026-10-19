@@ -1,7 +1,7 @@
 // Host tab: choose one of your saved fields, review it, then use it for the day.
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useCommand, useDay } from '../lib/day';
@@ -60,9 +60,12 @@ export function FieldPicker({ onClose }: { onClose: () => void }) {
           {fields && fields.length === 0 && <Body muted>You haven’t saved any fields yet.</Body>}
           {fields?.map((f) => (
             <Pressable key={f.id} onPress={() => setChosen(f)} accessibilityRole="button">
-              <Card>
-                <Text style={styles.name}>{f.name}</Text>
-                {f.location ? <Body muted>{f.location}</Body> : null}
+              <Card style={styles.row}>
+                {f.preview && <Image source={{ uri: f.preview }} style={styles.thumb} resizeMode="cover" />}
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.name}>{f.name}</Text>
+                  {f.location ? <Body muted>{f.location}</Body> : null}
+                </View>
               </Card>
             </Pressable>
           ))}
@@ -82,6 +85,8 @@ export function FieldPicker({ onClose }: { onClose: () => void }) {
 }
 
 const styles = StyleSheet.create({
+  row: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  thumb: { width: 88, height: 56, borderRadius: 6 },
   review: { flex: 1, backgroundColor: colours.background },
   reviewMap: { flex: 1, minHeight: 240 },
   name: { color: colours.text, fontSize: 24, ...display, marginBottom: space.xs },

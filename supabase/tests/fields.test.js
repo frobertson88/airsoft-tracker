@@ -1,4 +1,4 @@
-// Field Library and Game Day field (0003) on top of 0001/0002, in PGlite.
+// Field Library and Game Day field (0003, previews 0010) on top of 0001/0002, in PGlite.
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -65,7 +65,7 @@ let day, field;
 before(async () => {
   db = new PGlite();
   await db.exec(SUPABASE_STUB);
-  for (const f of ['0001_stage1.sql', '0002_section_leads.sql', '0003_fields.sql']) await db.exec(read(f));
+  for (const f of ['0001_stage1.sql', '0002_section_leads.sql', '0003_fields.sql', '0010_field_preview.sql']) await db.exec(read(f));
   for (const id of Object.values(U)) await db.query('insert into auth.users values ($1)', [id]);
   for (const [i, id] of Object.values(U).entries()) await as(id, 'select set_callsign($1)', [`P${i}`]);
   day = (await as(U.alpha, 'select create_game_day($1) as id', ['Sunday']))[0].id;
@@ -134,4 +134,16 @@ test('non-members cannot see the day field; tables are read-only', async () => {
 test('closed days reject picking a field', async () => {
   await as(U.alpha, 'select close_game_day($1)', [day]);
   await rejects(as(U.alpha, 'select select_day_field($1, $2)', [day, field]), 'day_closed');
+});
+
+test('the owner saves a picture of the field; duplicates keep it', async () => {
+  const pic = 'data:image/jpeg;base64,AAAA';
+  await as(U.alpha, 'select set_field_preview($1, $2)', [field, pic]);
+  assert.equal((await as(U.alpha, 'select preview from fields where id=$1', [field]))[0].preview, pic);
+  await rejects(as(U.bravo, 'select set_field_preview($1, $2)', [field, pic]), 'not_field_owner');
+  await rejects(as(U.alpha, 'select set_field_preview($1, $2)', [field, 'javascript:x']), 'field_preview_invalid');
+  await rejects(as(U.alpha, 'select set_field_preview($1, $2)', [field, pic + 'A'.repeat(400000)]), 'field_preview_invalid');
+  const copy = (await as(U.alpha, 'select duplicate_field($1) as id', [field]))[0].id;
+  assert.equal((await as(U.alpha, 'select preview from fields where id=$1', [copy]))[0].preview, pic);
+  await rejects(as(U.alpha, 'update fields set preview = null where id=$1', [field]), 'permission denied');
 });

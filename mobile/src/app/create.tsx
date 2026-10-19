@@ -1,7 +1,7 @@
 // Host a game day: name it and pick the field, which stays for the whole day.
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Pressable, StyleSheet, Text } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Body, Button, Card, ErrorText, Field, Label, Screen } from '../components/ui';
 import { api, friendlyError } from '../lib/api';
 import { useAuth } from '../lib/auth';
@@ -9,7 +9,7 @@ import type { SavedField } from '../lib/field';
 import { supabase } from '../lib/supabase';
 import { colours, display, fonts } from '../theme';
 
-type FieldRow = Pick<SavedField, 'id' | 'name' | 'location'>;
+type FieldRow = Pick<SavedField, 'id' | 'name' | 'location' | 'preview'>;
 
 export default function Create() {
   const { session } = useAuth();
@@ -24,7 +24,7 @@ export default function Create() {
     useCallback(() => {
       supabase
         .from('fields')
-        .select('id, name, location')
+        .select('id, name, location, preview')
         .eq('owner_id', session!.user.id)
         .eq('archived', false)
         .order('updated_at', { ascending: false })
@@ -59,9 +59,12 @@ export default function Create() {
       {fields && fields.length === 0 && <Body muted>You haven’t saved a field yet. Create one first.</Body>}
       {fields?.map((f) => (
         <Pressable key={f.id} onPress={() => setFieldId(f.id)} accessibilityRole="button" accessibilityState={{ selected: fieldId === f.id }}>
-          <Card style={fieldId === f.id ? styles.chosen : undefined}>
-            <Text style={styles.name}>{f.name}</Text>
-            {!!f.location && <Text style={styles.meta}>{f.location}</Text>}
+          <Card style={fieldId === f.id ? { ...styles.row, ...styles.chosen } : styles.row}>
+            {f.preview && <Image source={{ uri: f.preview }} style={styles.thumb} resizeMode="cover" />}
+            <View style={{ flex: 1 }}>
+              <Text style={styles.name}>{f.name}</Text>
+              {!!f.location && <Text style={styles.meta}>{f.location}</Text>}
+            </View>
           </Card>
         </Pressable>
       ))}
@@ -74,6 +77,8 @@ export default function Create() {
 }
 
 const styles = StyleSheet.create({
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  thumb: { width: 88, height: 56, borderRadius: 6 },
   chosen: { borderColor: colours.accent, backgroundColor: colours.selection },
   name: { color: colours.text, fontSize: 22, ...display },
   meta: { color: colours.textSecondary, fontFamily: fonts.regular, fontSize: 14 },

@@ -1,7 +1,7 @@
 // Field Library: your saved fields (docs/field-library.md#library-and-editor-screens).
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Body, Button, Card, ErrorText, Label, Row, Screen } from '../../components/ui';
 import { api, friendlyError } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
@@ -9,7 +9,7 @@ import type { SavedField } from '../../lib/field';
 import { supabase } from '../../lib/supabase';
 import { colours, display, fonts, space } from '../../theme';
 
-type FieldRow = Pick<SavedField, 'id' | 'name' | 'location' | 'archived' | 'updated_at' | 'data'>;
+type FieldRow = Pick<SavedField, 'id' | 'name' | 'location' | 'archived' | 'updated_at' | 'data' | 'preview'>;
 
 export default function FieldLibrary() {
   const { session } = useAuth();
@@ -21,7 +21,7 @@ export default function FieldLibrary() {
   const load = useCallback(async () => {
     const { data, error: e } = await supabase
       .from('fields')
-      .select('id, name, location, archived, updated_at, data')
+      .select('id, name, location, archived, updated_at, data, preview')
       .eq('owner_id', session!.user.id)
       .order('updated_at', { ascending: false });
     if (e) setError(e.message);
@@ -60,6 +60,13 @@ export default function FieldLibrary() {
       {active.map((f) => (
         <Card key={f.id}>
           <Pressable onPress={() => router.push(`/fields/${f.id}`)} accessibilityRole="button">
+            {f.preview ? (
+              <Image source={{ uri: f.preview }} style={styles.preview} resizeMode="cover" />
+            ) : (
+              <View style={[styles.preview, styles.noPreview]}>
+                <Text style={styles.meta}>Save the field on a phone to add its picture</Text>
+              </View>
+            )}
             <Text style={styles.name}>{f.name}</Text>
             <Text style={styles.meta}>
               {[f.location, `${f.data.areas?.length ?? 0} areas`, `${f.data.points?.length ?? 0} points`]
@@ -96,6 +103,8 @@ export default function FieldLibrary() {
 }
 
 const styles = StyleSheet.create({
+  preview: { width: '100%', aspectRatio: 1.6, borderRadius: 8, marginBottom: space.sm, backgroundColor: colours.background },
+  noPreview: { alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colours.border, aspectRatio: 3 },
   name: { color: colours.text, fontSize: 22, ...display },
   meta: { color: colours.textSecondary, fontFamily: fonts.regular, fontSize: 14, marginTop: 2 },
   toggle: { minHeight: 44, justifyContent: 'center' },

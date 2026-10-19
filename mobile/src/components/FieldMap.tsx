@@ -21,6 +21,8 @@ import { colours, fonts, space } from '../theme';
 export interface FieldMapHandle {
   goTo: (view: FieldView) => void;
   fit: () => void;
+  /** Fits the field, then returns a small JPEG of the map as a data URL (null if it can't). */
+  snapshot: () => Promise<string | null>;
 }
 
 /** A player shown on the map (teammates, or everyone for a host). */
@@ -132,12 +134,33 @@ export const FieldMap = forwardRef<FieldMapHandle, FieldMapProps>(function Field
   const map = useRef<MapView>(null);
   // Tapping a drawing can also reach the map's own onPress; ignore that echo.
   const lastDrawingPress = useRef(0);
+  const size = useRef({ width: 0, height: 0 });
+  const fieldRegion = () => {
+    const all = data.boundary.length ? data.boundary : data.points;
+    return toRegion(all.length ? viewFor(all, data.view) : data.view);
+  };
   useImperativeHandle(ref, () => ({
     goTo: (view) => map.current?.animateToRegion(toRegion(view), 400),
-    fit: () => {
-      const all = data.boundary.length ? data.boundary : data.points;
-      if (all.length) map.current?.animateToRegion(toRegion(viewFor(all, data.view)), 400);
-      else map.current?.animateToRegion(toRegion(data.view), 400);
+    fit: () => map.current?.animateToRegion(fieldRegion(), 400),
+    snapshot: async () => {
+      const m = map.current;
+      const { width, height } = size.current;
+      if (!m || !width || !height) return null;
+      m.animateToRegion(fieldRegion(), 0);
+      // Give the satellite tiles a moment to load at the new view.
+      await new Promise((r) => setTimeout(r, 1500));
+      try {
+        const b64 = await m.takeSnapshot({
+          width: 480,
+          height: Math.round((480 * height) / width),
+          format: 'jpg',
+          quality: 0.6,
+          result: 'base64',
+        });
+        return `data:image/jpeg;base64,${b64}`;
+      } catch {
+        return null;
+      }
     },
   }));
 
@@ -145,6 +168,9 @@ export const FieldMap = forwardRef<FieldMapHandle, FieldMapProps>(function Field
     <MapView
       ref={map}
       style={[styles.map, style]}
+      onLayout={(e) => {
+        size.current = { width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height };
+      }}
       mapType="hybrid"
       initialRegion={toRegion(data.view)}
       showsUserLocation={showsUserLocation}

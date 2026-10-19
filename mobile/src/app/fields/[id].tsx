@@ -65,6 +65,7 @@ export default function FieldEditor() {
 
   const [search, setSearch] = useState('');
   const [busy, setBusy] = useState(false);
+  const [saving, setSaving] = useState('');
   const [error, setError] = useState('');
 
   // Load an existing field, or start a new one near the phone's last known position.
@@ -186,10 +187,14 @@ export default function FieldEditor() {
     setBusy(true);
     try {
       // The map opens on whatever view you leave it on when you save.
-      await api.saveField(isNew ? null : id, name.trim(), location.trim(), notes.trim(), {
+      const fieldId = await api.saveField(isNew ? null : id, name.trim(), location.trim(), notes.trim(), {
         ...data,
         view: view.current,
       });
+      // A picture for the field lists. The field is already saved, so a failure here doesn't matter.
+      setSaving('Saving a picture of the field…');
+      const picture = await mapRef.current?.snapshot().catch(() => null);
+      if (picture) await api.setFieldPreview(fieldId, picture).catch(() => {});
       router.back();
     } catch (e) {
       setError(friendlyError(e));
@@ -332,6 +337,7 @@ export default function FieldEditor() {
 
             <Body muted>The map opens where you leave it when you save.</Body>
             <Button title="Save field" onPress={save} busy={busy} />
+            {!!saving && <Body muted>{saving}</Body>}
             <Button title="Cancel" variant="secondary" onPress={() => router.back()} />
           </>
         )}
