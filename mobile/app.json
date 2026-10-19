@@ -41,6 +41,9 @@
       ]
     ],
     "scheme": "airsofttracker",
-    "backgroundColor": "#0B100C"
+    "backgroundColor": "#0B100C",
+    "runtimeVersion": {
+      "policy": "sdkVersion"
+    }
   }
 }
