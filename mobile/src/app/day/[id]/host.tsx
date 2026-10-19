@@ -1,7 +1,6 @@
 // Host tab: admins manage the day here instead of an Admin Mode switch (docs/app-flow.md §12).
 // Kept calm: the game first, then one card each for players and the field, with
-// the rarely used day settings folded away at the bottom.
-import Ionicons from '@expo/vector-icons/Ionicons';
+// day settings at the bottom.
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -19,7 +18,6 @@ export default function HostTab() {
   const { id, data, isAdmin } = useDay();
   const { run, busy, error } = useCommand();
   const [picking, setPicking] = useState(false);
-  const [settings, setSettings] = useState(false);
   if (!data || !isAdmin) return null;
 
   const active = data.members.filter((m) => m.status === 'active');
@@ -85,33 +83,26 @@ export default function HostTab() {
       </Card>
       {picking && <FieldPicker onClose={() => setPicking(false)} />}
 
-      <Pressable onPress={() => setSettings(!settings)} accessibilityRole="button" style={styles.fold}>
-        <Text style={styles.foldText}>Day settings</Text>
-        <Ionicons name={settings ? 'chevron-up' : 'chevron-down'} size={18} color={colours.textSecondary} />
-      </Pressable>
-      {settings && (
-        <>
-          <Button title="Edit your profile" variant="secondary" onPress={() => router.push('/profile')} />
-          <TrackingSettings />
-          <Label>Game Day</Label>
-          <ConfirmButton
-            title="Leave Game Day"
-            confirmTitle="Tap again to leave"
-            busy={busy}
-            onConfirm={async () => {
-              if (await run(() => api.leaveGameDay(id))) goHome();
-            }}
-          />
-          <ConfirmButton
-            title="End Game Day"
-            confirmTitle="Tap again. This can’t be undone"
-            busy={busy}
-            onConfirm={async () => {
-              if (await run(() => api.closeGameDay(id))) goHome();
-            }}
-          />
-        </>
-      )}
+      <Label>Day settings</Label>
+      <Button title="Edit your profile" variant="secondary" onPress={() => router.push('/profile')} />
+      <TrackingSettings />
+      <Label>Game Day</Label>
+      <ConfirmButton
+        title="Leave Game Day"
+        confirmTitle="Tap again to leave"
+        busy={busy}
+        onConfirm={async () => {
+          if (await run(() => api.leaveGameDay(id))) goHome();
+        }}
+      />
+      <ConfirmButton
+        title="End Game Day"
+        confirmTitle="Tap again. This can’t be undone"
+        busy={busy}
+        onConfirm={async () => {
+          if (await run(() => api.closeGameDay(id))) goHome();
+        }}
+      />
       <ErrorText>{error}</ErrorText>
     </Screen>
   );
@@ -127,14 +118,4 @@ const styles = StyleSheet.create({
   meta: { color: colours.textSecondary, fontFamily: fonts.regular, fontSize: 14 },
   fieldName: { color: colours.text, fontSize: 22, ...display },
   bar: { flexDirection: 'row', height: 8, borderRadius: 4, overflow: 'hidden', gap: 2 },
-  fold: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    minHeight: 48,
-    marginTop: space.md,
-    borderTopWidth: 1,
-    borderTopColor: colours.border,
-  },
-  foldText: { color: colours.textSecondary, fontFamily: fonts.semibold, fontSize: 13, textTransform: 'uppercase', letterSpacing: 0.5 },
 });

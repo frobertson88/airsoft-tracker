@@ -11,6 +11,9 @@ import { ROLE_CHOICES, type DayRole } from '../lib/types';
 import { colours, display, fonts, radius, space, teamColour } from '../theme';
 import { Body, Button, Card, Chip, ErrorText, Field, Label, Row } from './ui';
 
+// New sections are named in order by default; the player can change it.
+const PHONETIC = ['Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo', 'Foxtrot', 'Golf', 'Hotel', 'India', 'Juliet', 'Kilo', 'Lima'];
+
 // '' = no section; 'new' = start a new one with the typed name.
 type SectionChoice = string | '' | 'new';
 
@@ -34,6 +37,9 @@ export function AssignmentSetup({ onDone, doneTitle = 'Save' }: { onDone: () => 
   ]
     .filter(Boolean)
     .join(' · ');
+
+  const taken = new Set(data.sections.filter((s) => s.team_id === team).map((s) => s.name.toLowerCase()));
+  const nextName = PHONETIC.find((n) => !taken.has(n.toLowerCase())) ?? '';
 
   const pickTeam = (t: string) => {
     if (t !== team) setSection('');
@@ -129,15 +135,22 @@ export function AssignmentSetup({ onDone, doneTitle = 'Save' }: { onDone: () => 
                         setNewName(v);
                         setError('');
                       }}
-                      placeholder="New section name, e.g. Alpha"
+                      placeholder="Section name"
                       maxLength={24}
                       autoFocus
                     />
                     <Text style={styles.subtitle}>You’ll lead it. You can hand the lead on later.</Text>
                   </View>
                 ) : (
-                  <Pressable onPress={() => setSection('new')} accessibilityRole="button" style={styles.newLink}>
-                    <Text style={styles.newLinkText}>+ Start a new section</Text>
+                  <Pressable
+                    onPress={() => {
+                      setNewName(nextName);
+                      setSection('new');
+                    }}
+                    accessibilityRole="button"
+                    style={styles.newLink}
+                  >
+                    <Text style={styles.newLinkText}>+ Start {nextName ? `${nextName} section` : 'a new section'}</Text>
                   </Pressable>
                 )}
               </>

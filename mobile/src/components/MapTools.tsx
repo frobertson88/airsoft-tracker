@@ -60,27 +60,22 @@ export function useMapTools({
 
   const hostView = !!(isAdmin && me?.map_host_view);
   const myTeam = me?.team_id ?? null;
-  const mySection = me?.section_id ?? null;
 
-  // Audiences you may pick. Players: their section and team. Host view: any team or section, or admins only.
+  // Audiences you may pick. Players: their whole team. Host view: any team, or admins only.
   const choices = useMemo<Target[]>(() => {
     if (!data) return [];
     if (!hostView) {
       const out: Target[] = [];
-      if (mySection && myTeam) out.push({ audience: 'section', team_id: myTeam, section_id: mySection });
       if (myTeam) out.push({ audience: 'team', team_id: myTeam, section_id: null });
       return out;
     }
     const out: Target[] = [];
     for (const t of data.teams) {
       out.push({ audience: 'team', team_id: t.id, section_id: null });
-      for (const s of data.sections.filter((x) => x.team_id === t.id)) {
-        out.push({ audience: 'section', team_id: t.id, section_id: s.id });
-      }
     }
     out.push({ audience: 'admin', team_id: null, section_id: null });
     return out;
-  }, [data, hostView, myTeam, mySection]);
+  }, [data, hostView, myTeam]);
 
   // The selected Friendly audience if still allowed, else your section (or team).
   const friendlyTarget: Target | null =
@@ -341,21 +336,8 @@ export function useMapTools({
     setPalette(null);
   };
 
-  const onTargetPress = () => {
-    if (hostView) {
-      setPalette(palette === 'target' ? null : 'target');
-      return;
-    }
-    if (affiliation === 'enemy') {
-      setMessage('Enemy reports always go to your whole team.');
-      return;
-    }
-    // Players: one tap toggles SEC ↔ TEAM.
-    if (choices.length > 1 && friendlyTarget) {
-      const other = choices.find((c) => !sameTarget(c, friendlyTarget));
-      if (other) setFriendly(other);
-    } else if (!mySection) setMessage('Join a section on the Squad tab to share with just your section.');
-  };
+  // Only Host view picks an audience; players always share with their whole team.
+  const onTargetPress = () => setPalette(palette === 'target' ? null : 'target');
 
   const toggleHostView = (on: boolean) => {
     reset({ type: 'cursor' });
@@ -378,11 +360,13 @@ export function useMapTools({
       <RailButton label={affiliation === 'friendly' ? 'Friendly' : 'Enemy'} onPress={toggleAffiliation} colour={affColour}>
         <Text style={[styles.railLetter, { color: affColour }]}>{affiliation === 'friendly' ? 'F' : 'E'}</Text>
       </RailButton>
-      <RailButton label={`Audience: ${targetName(target)}`} onPress={onTargetPress} active={palette === 'target'}>
-        <Text style={styles.railSmall} numberOfLines={1}>
-          {targetShort(target)}
-        </Text>
-      </RailButton>
+      {hostView && (
+        <RailButton label={`Audience: ${targetName(target)}`} onPress={onTargetPress} active={palette === 'target'}>
+          <Text style={styles.railSmall} numberOfLines={1}>
+            {targetShort(target)}
+          </Text>
+        </RailButton>
+      )}
       <RailButton
         label="Icons"
         icon="map-marker-plus"
