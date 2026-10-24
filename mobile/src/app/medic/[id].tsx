@@ -1,8 +1,8 @@
-// Medic rules editor: a tab per hit (wound name, instruction, who can help) and
-// what happens at bleed-out. A random set has a Wounds tab instead (each with a
-// chance and a fatal switch) and picks which hit is always dead. id "new"
-// starts from Standard; a built-in set opens as a copy, since built-ins can't
-// be changed.
+// Medic rules editor: one list of wound cards (name, instruction, who can help)
+// then Dead, and what happens at bleed-out. In order, each card is the next hit;
+// Random, each card also has a chance (adding up to 100%) and a fatal switch,
+// and you pick which hit is always dead. id "new" starts from Standard; a
+// built-in set opens as a copy, since built-ins can't be changed.
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -15,7 +15,6 @@ import {
   isRandom,
   ORDINAL,
   useMedicRulesets,
-  type Helper,
   type MedicRules,
   type MedicRuleset,
   type Wound,
@@ -41,61 +40,46 @@ export default function MedicEditor() {
 
 function Editor({ source, copy, isNew }: { source: MedicRuleset; copy: boolean; isNew: boolean }) {
   const [name, setName] = useState(isNew ? '' : copy ? `${source.name} copy`.slice(0, 40) : source.name);
-  const [rules, setRules] = useState<MedicRules>({ hits: source.rules.hits, expiry: source.rules.expiry });
-  // Random sets: the wound list and the hit that's always dead. Kept while you
-  // switch back and forth; only saved when Random is picked.
+  const [expiry, setExpiry] = useState(source.rules.expiry);
+  // In order: the wounds before Dead. Random: the wound list and the hit that's
+  // always dead. Both lists are kept while you switch; only one is saved.
+  const [ordered, setOrdered] = useState<Wound[]>(source.rules.hits.slice(0, -1));
+  const [dead, setDead] = useState<Wound>(source.rules.hits[source.rules.hits.length - 1]);
   const [random, setRandom] = useState(isRandom(source.rules));
-  const [wounds, setWounds] = useState<Wound[]>(
-    source.rules.wounds?.length ? source.rules.wounds : starterWounds(source.rules),
+  const [wounds, setWounds] = useState<Wound[]>(() =>
+    toPercents(source.rules.wounds?.length ? source.rules.wounds : starterWounds(source.rules)),
   );
   const [deadOn, setDeadOn] = useState(source.rules.dead_on ?? 3);
-  const [tab, setTab] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
-  const tabs = random
-    ? ['Wounds', 'Dead']
-    : rules.hits.map((_, i) => (i === rules.hits.length - 1 ? 'Dead' : `${ORDINAL[i + 1]} hit`));
-  const dead = tab === tabs.length - 1;
-  const hitIndex = dead ? rules.hits.length - 1 : tab;
-  const setHit = (patch: Partial<Wound>) =>
-    setRules((r) => ({ ...r, hits: r.hits.map((h, i) => (i === hitIndex ? { ...h, ...patch } : h)) }));
-  const setWound = (index: number, patch: Partial<Wound>) =>
-    setWounds((ws) => ws.map((w, i) => (i === index ? { ...w, ...patch } : w)));
-  // In order: 1–5 wounds before Dead. A new hit starts as a copy of this one.
-  const addHit = () => {
-    setRules((r) => ({ ...r, hits: [...r.hits.slice(0, tab + 1), { ...r.hits[tab] }, ...r.hits.slice(tab + 1)] }));
-    setTab(tab + 1);
-  };
-  const removeHit = () => {
-    setRules((r) => ({ ...r, hits: r.hits.filter((_, i) => i !== tab) }));
-    setTab(Math.max(0, tab - 1));
-  };
-  const pickMode = (r: boolean) => {
-    setRandom(r);
-    setTab(0);
-  };
+  const list = random ? wounds : ordered;
+  const setList = random ? setWounds : setOrdered;
+  const max = random ? 12 : 5;
+  const total = wounds.reduce((n, w) => n + (w.chance ?? 0), 0);
+  const edit = (index: number, patch: Partial<Wound>) =>
+    setList((ws) => ws.map((w, i) => (i === index ? { ...w, ...patch } : w)));
 
   const save = async () => {
     if (!name.trim()) return setError('Give the rules a name.');
-    const empty = rules.hits.findIndex(
-      (h, i) => (!random || i === rules.hits.length - 1) && (!h.name.trim() || h.helpers.length === 0),
+    if (list.some((w) => !w.name.trim() || (!w.fatal && w.helpers.length === 0))) {
+      return setError('Each wound needs a name and at least one person who can treat it.');
+    }
+    if (!dead.name.trim() || dead.helpers.length === 0) {
+      return setError('Dead needs a name and someone who can bring them back.');
+    }
+    if (random && total !== 100) return setError(`The chances add up to ${total}%. Make them 100%.`);
+    // A random set still saves in-order hits, for the published app to show.
+    const hits = [...(ordered.length ? ordered : wounds.filter((w) => !w.fatal).slice(0, 1)), dead].map(
+      ({ name, instruction, helpers }) => ({ name, instruction, helpers }),
     );
-    if (empty >= 0) {
-      setTab(random ? 1 : empty);
-      return setError('Each hit needs a name and at least one person who can help.');
-    }
-    if (random && wounds.some((w) => !w.name.trim() || (!w.fatal && w.helpers.length === 0) || !w.chance)) {
-      setTab(0);
-      return setError('Each wound needs a name, a chance of 1 to 100, and someone who can treat it.');
-    }
     setBusy(true);
     setError('');
     try {
       await api.saveMedicRuleset(
         copy ? null : source.id,
         name.trim(),
-        random ? { ...rules, wounds, dead_on: deadOn } : rules,
+        random ? { hits, expiry, wounds, dead_on: deadOn } : { hits, expiry },
       );
       router.back();
     } catch (e) {
@@ -105,7 +89,6 @@ function Editor({ source, copy, isNew }: { source: MedicRuleset; copy: boolean; 
     }
   };
 
-  const pc = chancePercents(wounds);
   return (
     <Screen>
       <Stack.Screen options={{ title: copy ? 'New medic rules' : 'Edit medic rules' }} />
@@ -114,150 +97,99 @@ function Editor({ source, copy, isNew }: { source: MedicRuleset; copy: boolean; 
 
       <Label>Wounds</Label>
       <Row>
-        <Chip label="In order" selected={!random} onPress={() => pickMode(false)} />
-        <Chip label="Random" selected={random} onPress={() => pickMode(true)} />
+        <Chip label="In order" selected={!random} onPress={() => setRandom(false)} />
+        <Chip label="Random" selected={random} onPress={() => setRandom(true)} />
       </Row>
       <Text style={styles.help}>
         {random
-          ? 'Each hit picks a wound from your list by its chance. The player only finds out when someone scans them.'
-          : 'Leg, then arm, then dead: the same order every life.'}
+          ? 'Each hit picks a wound from the list by its chance. The player only finds out when someone scans them.'
+          : 'The same wounds in the same order every life, then dead.'}
       </Text>
 
-      <Row>
-        {tabs.map((t, i) => (
-          <Chip key={t} label={t} selected={tab === i} onPress={() => setTab(i)} />
-        ))}
-      </Row>
-
-      {random && !dead ? (
-        <>
-          {wounds.map((w, i) => (
-            <Card key={i}>
-              <Text style={styles.small}>Wound name</Text>
-              <Field
-                value={w.name}
-                onChangeText={(v) => setWound(i, { name: v })}
-                placeholder="Head shot"
-                maxLength={30}
-              />
-              <Text style={styles.small}>What the player does</Text>
-              <Field
-                value={w.instruction}
-                onChangeText={(v) => setWound(i, { instruction: v })}
-                placeholder="Bandage the leg. Walk only until treated."
-                maxLength={200}
-                multiline
-                style={styles.multi}
-              />
-              <Text style={styles.small}>Chance</Text>
-              <View style={styles.chance}>
-                <Field
-                  value={w.chance ? String(w.chance) : ''}
-                  onChangeText={(v) => setWound(i, { chance: Math.min(100, Number(v.replace(/[^0-9]/g, '')) || 0) })}
-                  keyboardType="number-pad"
-                  maxLength={3}
-                  placeholder="1"
-                  style={styles.chanceField}
-                />
-                <Text style={styles.percent}>{pc[i]}% of hits</Text>
-              </View>
-              <Row>
-                <Chip label="Fatal" selected={!!w.fatal} onPress={() => setWound(i, { fatal: !w.fatal })} />
-              </Row>
-              {w.fatal ? (
-                <Text style={styles.help}>Dead at once. The Dead tab says who can bring them back.</Text>
-              ) : (
-                <>
-                  <Text style={styles.small}>Who can treat it</Text>
-                  <HelperChips helpers={w.helpers} onChange={(helpers) => setWound(i, { helpers })} />
-                </>
-              )}
-              <Row>
-                {wounds.length < 12 && (
-                  <Button
-                    title="Duplicate"
-                    variant="quiet"
-                    onPress={() => setWounds((ws) => [...ws.slice(0, i + 1), { ...w }, ...ws.slice(i + 1)])}
-                  />
-                )}
-                {wounds.length > 1 && (
-                  <Button
-                    title="Remove"
-                    variant="quiet"
-                    onPress={() => setWounds((ws) => ws.filter((_, j) => j !== i))}
-                  />
-                )}
-              </Row>
-            </Card>
-          ))}
-          {wounds.length < 12 && (
-            <Button
-              title="Add wound"
-              variant="secondary"
-              onPress={() =>
-                setWounds((ws) => [...ws, { name: '', instruction: '', helpers: ['medic'], chance: 10, fatal: false }])
-              }
-            />
-          )}
-          <Text style={styles.help}>Chances are weighed against each other, so they don’t need to add up to 100.</Text>
-        </>
-      ) : (
-        <Card>
-          <Text style={styles.small}>
-            {dead ? (random ? 'Dead' : `${ORDINAL[rules.hits.length]} hit`) : 'Wound name'}
-          </Text>
-          <Field
-            value={rules.hits[hitIndex].name}
-            onChangeText={(v) => setHit({ name: v })}
-            placeholder={dead ? 'Dead' : 'Leg wound'}
-            maxLength={30}
-          />
-          <Text style={styles.small}>What the player does</Text>
-          <Field
-            value={rules.hits[hitIndex].instruction}
-            onChangeText={(v) => setHit({ instruction: v })}
-            placeholder={dead ? 'Go back to respawn with your hand up.' : 'Bandage the leg. Walk only until treated.'}
-            maxLength={200}
-            multiline
-            style={styles.multi}
-          />
-          <Text style={styles.small}>{dead ? 'Who can bring them back' : 'Who can treat it'}</Text>
-          <HelperChips helpers={rules.hits[hitIndex].helpers} onChange={(helpers) => setHit({ helpers })} />
-          <Text style={styles.help}>Medic means players whose role today is Medic, on the same team.</Text>
-          {!random && !dead && (
-            <Row>
-              {rules.hits.length < 6 && <Button title="Add a hit after this" variant="quiet" onPress={addHit} />}
-              {rules.hits.length > 2 && <Button title="Remove this hit" variant="quiet" onPress={removeHit} />}
-            </Row>
-          )}
+      {list.map((w, i) => (
+        <Card key={i}>
+          <Text style={styles.kicker}>{random ? `Wound ${i + 1}` : `${ORDINAL[i + 1]} hit`}</Text>
+          <WoundFields wound={w} onChange={(patch) => edit(i, patch)} />
           {random && (
             <>
-              <Text style={styles.small}>Dead on hit</Text>
+              <Text style={styles.small}>Chance</Text>
+              <View style={styles.chance}>
+                <Button
+                  title="−"
+                  variant="secondary"
+                  onPress={() => edit(i, { chance: (w.chance ?? 0) > 5 ? (w.chance ?? 0) - 5 : w.chance })}
+                />
+                <Text style={styles.percent}>{w.chance ?? 0}%</Text>
+                <Button
+                  title="+"
+                  variant="secondary"
+                  onPress={() => edit(i, { chance: Math.min(100, (w.chance ?? 0) + 5) })}
+                />
+              </View>
               <Row>
-                {DEAD_ON_CHOICES.map((n) => (
-                  <Chip key={n} label={ORDINAL[n]} selected={deadOn === n} onPress={() => setDeadOn(n)} />
-                ))}
+                <Chip label="Fatal" selected={!!w.fatal} onPress={() => edit(i, { fatal: !w.fatal })} />
               </Row>
-              <Text style={styles.help}>
-                The {ORDINAL[deadOn]} hit in one life is dead, whatever the earlier wounds were. A fatal wound is dead
-                sooner.
-              </Text>
             </>
           )}
+          <Row>
+            {list.length < max && (
+              <Button
+                title="Duplicate"
+                variant="quiet"
+                onPress={() => setList((ws) => [...ws.slice(0, i + 1), { ...w }, ...ws.slice(i + 1)])}
+              />
+            )}
+            {list.length > 1 && (
+              <Button title="Remove" variant="quiet" onPress={() => setList((ws) => ws.filter((_, j) => j !== i))} />
+            )}
+          </Row>
         </Card>
+      ))}
+      {list.length < max && (
+        <Button
+          title={random ? 'Add wound' : 'Add hit'}
+          variant="secondary"
+          onPress={() =>
+            setList((ws) => [
+              ...ws,
+              { name: '', instruction: '', helpers: ['medic'], ...(random ? { chance: 10, fatal: false } : {}) },
+            ])
+          }
+        />
       )}
+      {random && (
+        <Row>
+          <Text style={[styles.percent, total !== 100 && { color: colours.danger }]}>Total {total}%</Text>
+          <Button title="Split evenly" variant="quiet" onPress={() => setWounds((ws) => toPercents(ws, true))} />
+        </Row>
+      )}
+
+      <Card>
+        <Text style={styles.kicker}>
+          {random ? `${ORDINAL[deadOn]} hit · Dead` : `${ORDINAL[list.length + 1]} hit · Dead`}
+        </Text>
+        <WoundFields wound={dead} onChange={(patch) => setDead((d) => ({ ...d, ...patch }))} dead />
+        {random && (
+          <>
+            <Text style={styles.small}>Dead on hit</Text>
+            <Row>
+              {DEAD_ON_CHOICES.map((n) => (
+                <Chip key={n} label={ORDINAL[n]} selected={deadOn === n} onPress={() => setDeadOn(n)} />
+              ))}
+            </Row>
+            <Text style={styles.help}>A fatal wound is dead sooner, and follows these rules too.</Text>
+          </>
+        )}
+      </Card>
+      <Text style={styles.help}>Medic means players whose role today is Medic, on the same team.</Text>
 
       <Label>When bleed-out runs out</Label>
       <Row>
-        <Chip label="Dead" selected={rules.expiry === 'dead'} onPress={() => setRules({ ...rules, expiry: 'dead' })} />
-        <Chip
-          label="Wait for help"
-          selected={rules.expiry === 'wait'}
-          onPress={() => setRules({ ...rules, expiry: 'wait' })}
-        />
+        <Chip label="Dead" selected={expiry === 'dead'} onPress={() => setExpiry('dead')} />
+        <Chip label="Wait for help" selected={expiry === 'wait'} onPress={() => setExpiry('wait')} />
       </Row>
       <Text style={styles.help}>
-        {rules.expiry === 'dead'
+        {expiry === 'dead'
           ? 'An untreated wound becomes dead, and they need bringing back.'
           : 'They stay out of play until someone treats them.'}
       </Text>
@@ -268,31 +200,88 @@ function Editor({ source, copy, isNew }: { source: MedicRuleset; copy: boolean; 
   );
 }
 
-function HelperChips({ helpers, onChange }: { helpers: Helper[]; onChange: (helpers: Helper[]) => void }) {
+/** Name, instruction and helpers: the same for a hit, a random wound and Dead. */
+function WoundFields({
+  wound,
+  onChange,
+  dead,
+}: {
+  wound: Wound;
+  onChange: (patch: Partial<Wound>) => void;
+  dead?: boolean;
+}) {
   return (
-    <Row>
-      {HELPERS.map((h) => (
-        <Chip
-          key={h.helper}
-          label={h.label}
-          selected={helpers.includes(h.helper)}
-          onPress={() =>
-            onChange(helpers.includes(h.helper) ? helpers.filter((x) => x !== h.helper) : [...helpers, h.helper])
-          }
-        />
-      ))}
-    </Row>
+    <>
+      <Field
+        value={wound.name}
+        onChangeText={(v) => onChange({ name: v })}
+        placeholder={dead ? 'Dead' : 'Wound name, e.g. Leg wound'}
+        maxLength={30}
+      />
+      <Text style={styles.small}>What the player does</Text>
+      <Field
+        value={wound.instruction}
+        onChangeText={(v) => onChange({ instruction: v })}
+        placeholder={dead ? 'Go back to respawn with your hand up.' : 'Bandage the leg. Walk only until treated.'}
+        maxLength={200}
+        multiline
+        style={styles.multi}
+      />
+      {wound.fatal ? (
+        <Text style={styles.help}>Fatal: dead at once. The Dead card says who can bring them back.</Text>
+      ) : (
+        <>
+          <Text style={styles.small}>{dead ? 'Who can bring them back' : 'Who can treat it'}</Text>
+          <Row>
+            {HELPERS.map((h) => (
+              <Chip
+                key={h.helper}
+                label={h.label}
+                selected={wound.helpers.includes(h.helper)}
+                onPress={() =>
+                  onChange({
+                    helpers: wound.helpers.includes(h.helper)
+                      ? wound.helpers.filter((x) => x !== h.helper)
+                      : [...wound.helpers, h.helper],
+                  })
+                }
+              />
+            ))}
+          </Row>
+        </>
+      )}
+    </>
   );
 }
 
-/** A first wound list when switching an in-order set to Random: its two wounds, evenly. */
-const starterWounds = (r: MedicRules): Wound[] => r.hits.slice(0, -1).map((h) => ({ ...h, chance: 50, fatal: false }));
+/** A first wound list when switching an in-order set to Random: its wounds. */
+const starterWounds = (r: MedicRules): Wound[] => r.hits.slice(0, -1).map((h) => ({ ...h, fatal: false }));
+
+/**
+ * Chances as whole percentages adding up to 100 (older sets saved free
+ * weights). even: split equally. Rounding leftovers go to the first wounds.
+ */
+function toPercents(wounds: Wound[], even = false): Wound[] {
+  const pc = even ? wounds.map(() => Math.floor(100 / wounds.length)) : chancePercents(wounds);
+  let left = 100 - pc.reduce((a, b) => a + b, 0);
+  return wounds.map((w, i) => {
+    const extra = left > 0 ? 1 : left < 0 ? -1 : 0;
+    left -= extra;
+    return { ...w, chance: Math.max(1, pc[i] + extra) };
+  });
+}
 
 const styles = StyleSheet.create({
+  kicker: {
+    color: colours.accent,
+    fontFamily: fonts.semibold,
+    fontSize: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
   small: { color: colours.textSecondary, fontFamily: fonts.medium, fontSize: 14 },
   help: { color: colours.textSecondary, fontFamily: fonts.regular, fontSize: 13 },
   multi: { minHeight: 80, paddingTop: 12, textAlignVertical: 'top' },
   chance: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  chanceField: { width: 80 },
-  percent: { color: colours.text, fontFamily: fonts.semibold, fontSize: 15 },
+  percent: { color: colours.text, fontFamily: fonts.semibold, fontSize: 17, minWidth: 56, textAlign: 'center' },
 });
