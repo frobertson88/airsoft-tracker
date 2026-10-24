@@ -4,7 +4,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Location from 'expo-location';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Keyboard, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FieldMap, type FieldMapHandle } from '../../components/FieldMap';
 import { Body, Button, Card, Chip, ErrorText, Field, FocusScrollView, Label, Loading, Row } from '../../components/ui';
@@ -67,6 +67,7 @@ export default function FieldEditor() {
   const [busy, setBusy] = useState(false);
   const [saving, setSaving] = useState('');
   const [error, setError] = useState('');
+  const keyboardUp = useKeyboardUp();
 
   // Load an existing field, or start a new one near the phone's last known position.
   useEffect(() => {
@@ -209,7 +210,8 @@ export default function FieldEditor() {
   return (
     <SafeAreaView style={styles.screen} edges={['bottom']}>
       <Stack.Screen options={{ title: isNew ? 'New field' : 'Edit field' }} />
-      <View style={styles.mapWrap}>
+      {/* With the keyboard up the map shrinks to a strip so the form stays in view. */}
+      <View style={keyboardUp ? styles.mapStrip : styles.mapWrap}>
         <FieldMap
           ref={mapRef}
           data={data}
@@ -346,6 +348,20 @@ export default function FieldEditor() {
   );
 }
 
+function useKeyboardUp() {
+  const [up, setUp] = useState(false);
+  useEffect(() => {
+    const ios = Platform.OS === 'ios';
+    const show = Keyboard.addListener(ios ? 'keyboardWillShow' : 'keyboardDidShow', () => setUp(true));
+    const hide = Keyboard.addListener(ios ? 'keyboardWillHide' : 'keyboardDidHide', () => setUp(false));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+  return up;
+}
+
 function ItemRow({ title, detail, warn, onRemove }: { title: string; detail?: string; warn?: boolean; onRemove?: () => void }) {
   return (
     <View style={styles.item}>
@@ -365,6 +381,7 @@ function ItemRow({ title, detail, warn, onRemove }: { title: string; detail?: st
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colours.background },
   mapWrap: { flex: 1.2 },
+  mapStrip: { height: 120 },
   fab: {
     position: 'absolute',
     right: space.md,
