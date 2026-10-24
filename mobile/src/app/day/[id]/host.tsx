@@ -3,16 +3,16 @@
 // day settings at the bottom.
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { FieldPicker } from '../../../components/FieldPicker';
 import { GameControls } from '../../../components/GameControls';
 import { MemberRow } from '../../../components/MemberList';
-import { TrackingSettings } from '../../../components/TrackingSettings';
-import { Body, Button, Card, ConfirmButton, ErrorText, Label, Screen } from '../../../components/ui';
+import { TrackingRows } from '../../../components/TrackingSettings';
+import { Button, Card, ConfirmButton, ErrorText, Label, List, ListRow, Screen } from '../../../components/ui';
 import { api } from '../../../lib/api';
 import { useCommand, useDay } from '../../../lib/day';
 import { goHome } from '../../../lib/nav';
-import { colours, display, space, teamColour, fonts } from '../../../theme';
+import { colours, space, teamColour, fonts } from '../../../theme';
 
 export default function HostTab() {
   const { id, data, isAdmin } = useDay();
@@ -60,32 +60,32 @@ export default function HostTab() {
       </Card>
 
       <Label>Field</Label>
-      <Card>
+      <List>
         {data.field ? (
-          <View style={styles.between}>
-            <View style={{ flexShrink: 1 }}>
-              <Text style={styles.fieldName}>{data.field.name}</Text>
-              {gameRunning && <Text style={styles.meta}>Change it between games.</Text>}
-            </View>
-            {!gameRunning && (
-              <Pressable onPress={() => setPicking(true)} accessibilityRole="button" hitSlop={8}>
-                <Text style={styles.link}>Change</Text>
-              </Pressable>
-            )}
-          </View>
+          <ListRow
+            title={data.field.name}
+            detail={gameRunning ? 'Change it between games' : undefined}
+            value={gameRunning ? undefined : 'Change'}
+            valueColour={colours.accent}
+            onPress={gameRunning ? undefined : () => setPicking(true)}
+          />
         ) : (
-          <>
-            <Text style={[styles.fieldName, { color: colours.danger }]}>No field yet</Text>
-            <Body muted>Pick one before the first game.</Body>
-            <Button title="Choose field" onPress={() => setPicking(true)} />
-          </>
+          <ListRow
+            title="No field yet"
+            detail="Pick one before the first game"
+            value="Choose"
+            valueColour={colours.danger}
+            onPress={() => setPicking(true)}
+          />
         )}
-      </Card>
+      </List>
       {picking && <FieldPicker onClose={() => setPicking(false)} />}
 
       <Label>Day settings</Label>
-      <Button title="Edit your profile" variant="secondary" onPress={() => router.push('/profile')} />
-      <TrackingSettings />
+      <List>
+        <ListRow title="Your profile" detail="Callsign and sign out" onPress={() => router.push('/profile')} />
+        <TrackingRows />
+      </List>
       <Label>Game Day</Label>
       <ConfirmButton
         title="Leave Game Day"
@@ -109,13 +109,9 @@ export default function HostTab() {
 }
 
 const styles = StyleSheet.create({
-  between: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: space.md },
   big: { color: colours.text, fontFamily: fonts.semibold, fontSize: 17 },
   counts: { flexDirection: 'row', flexWrap: 'wrap', columnGap: space.lg, rowGap: space.xs },
   count: { fontFamily: fonts.medium, fontSize: 14, fontVariant: ['tabular-nums'] },
   waiting: { color: colours.danger, fontFamily: fonts.regular, fontSize: 14 },
-  link: { color: colours.accent, fontFamily: fonts.semibold, fontSize: 15 },
-  meta: { color: colours.textSecondary, fontFamily: fonts.regular, fontSize: 14 },
-  fieldName: { color: colours.text, fontSize: 22, ...display },
   bar: { flexDirection: 'row', height: 8, borderRadius: 4, overflow: 'hidden', gap: 2 },
 });

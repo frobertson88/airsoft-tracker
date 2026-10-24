@@ -7,7 +7,7 @@ import { Modal, Pressable, StyleSheet, Text, Vibration, View } from 'react-nativ
 import QRCode from 'react-native-qrcode-svg';
 import { api, friendlyError } from '../lib/api';
 import { clockFor, formatClock, useServerNow, type Game } from '../lib/game';
-import { bleedLeft, encodeCode, helperText, statusLabel, type MedicSettings, type MyMedic } from '../lib/medic';
+import { bleedLeft, encodeCode, helperText, myWound, statusLabel, type MedicSettings, type MyMedic } from '../lib/medic';
 import { colours, fonts, radius, space } from '../theme';
 import { Body, Button, Display, Screen } from './ui';
 
@@ -150,7 +150,7 @@ function HitView({
   state: string;
   onClose: () => void;
 }) {
-  const wound = mine.shown_hit ? medic.hits[mine.shown_hit - 1] : null;
+  const wound = myWound(mine, medic);
   const deadWound = medic.hits[medic.hits.length - 1];
   return (
     <Modal visible animationType="slide" onRequestClose={onClose} presentationStyle="fullScreen">

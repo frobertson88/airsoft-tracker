@@ -24,6 +24,7 @@ While implementing:
 - Do not refactor unrelated code.
 - Avoid abstractions until there is a demonstrated need.
 - Keep UI components focused and reusable.
+- Lists and settings use the list-row style (`List`, `ListRow`, `useOpenRow` in `components/ui.tsx`); see `docs/design-direction.md`, List rows.
 - Keep business/game logic separate from UI where practical.
 
 ## Architecture

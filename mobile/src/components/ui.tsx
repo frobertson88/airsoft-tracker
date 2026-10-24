@@ -1,3 +1,4 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { createContext, useContext, useRef, useState, type ReactNode, type RefObject } from 'react';
 import {
   ActivityIndicator,
@@ -54,7 +55,11 @@ export function Title({ children }: { children: ReactNode }) {
 
 /** Big uppercase heading for names, teams and modes. */
 export function Display({ children, size = 28, colour }: { children: ReactNode; size?: number; colour?: string }) {
-  return <Text style={[styles.display, { fontFamily: fonts.regular, fontSize: size }, colour ? { color: colour } : null]}>{children}</Text>;
+  return (
+    <Text style={[styles.display, { fontFamily: fonts.regular, fontSize: size }, colour ? { color: colour } : null]}>
+      {children}
+    </Text>
+  );
 }
 
 export function Label({ children }: { children: ReactNode }) {
@@ -211,14 +216,147 @@ export function Loading() {
   );
 }
 
+/**
+ * A bordered group of rows (docs/design-direction.md, "List rows"): the house
+ * style for lists and settings. Rows are split by thin lines.
+ */
+export function List({ children, style }: { children: ReactNode; style?: ViewStyle }) {
+  return (
+    <View style={[styles.list, style]}>
+      <View style={styles.listInner}>{children}</View>
+    </View>
+  );
+}
+
+/**
+ * One row of a List: title and detail on the left, the value on the right
+ * (big for a number that matters, like a chance). With children it opens on
+ * tap to show them (keep one row open at a time); with only onPress it goes
+ * somewhere (chevron right). right replaces the value, e.g. with a Switch.
+ */
+export function ListRow({
+  title,
+  detail,
+  value,
+  big,
+  valueColour,
+  left,
+  right,
+  open,
+  onPress,
+  children,
+}: {
+  title: string;
+  detail?: string;
+  value?: string;
+  big?: boolean;
+  valueColour?: string;
+  left?: ReactNode;
+  right?: ReactNode;
+  open?: boolean;
+  onPress?: () => void;
+  children?: ReactNode;
+}) {
+  const opens = children !== undefined && children !== null && children !== false;
+  const content = (
+    <>
+      {left}
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text style={styles.rowTitle}>{title}</Text>
+        {!!detail && <Text style={styles.rowDetail}>{detail}</Text>}
+      </View>
+      {right ??
+        (!!value && (
+          <Text style={[big ? styles.rowBig : styles.rowValue, valueColour ? { color: valueColour } : null]}>
+            {value}
+          </Text>
+        ))}
+      {onPress && (
+        <Ionicons
+          name={opens ? (open ? 'chevron-up' : 'chevron-down') : 'chevron-forward'}
+          size={18}
+          color={colours.textSecondary}
+        />
+      )}
+    </>
+  );
+  return (
+    <View style={styles.listItem}>
+      {onPress ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={opens ? { expanded: !!open } : undefined}
+          onPress={onPress}
+          style={({ pressed }) => [styles.listRow, pressed && { opacity: 0.6 }]}
+        >
+          {content}
+        </Pressable>
+      ) : (
+        <View style={styles.listRow}>{content}</View>
+      )}
+      {open && opens && <View style={styles.rowBody}>{children}</View>}
+    </View>
+  );
+}
+
+/** The last row of a List that adds an item, in the accent colour. */
+export function ListAdd({ title, onPress }: { title: string; onPress: () => void }) {
+  return (
+    <View style={styles.listItem}>
+      <Pressable
+        accessibilityRole="button"
+        onPress={onPress}
+        style={({ pressed }) => [styles.listRow, { minHeight: 52 }, pressed && { opacity: 0.6 }]}
+      >
+        <Text style={styles.listAdd}>+ {title}</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+/** One open row at a time: open(key) toggles it; isOpen(key) says if it's open. */
+export function useOpenRow<K extends string | number>() {
+  const [openKey, setOpenKey] = useState<K | null>(null);
+  return {
+    isOpen: (key: K) => openKey === key,
+    toggle: (key: K) => setOpenKey((k) => (k === key ? null : key)),
+    setOpen: setOpenKey,
+  };
+}
+
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colours.background },
+  list: {
+    backgroundColor: colours.surface,
+    borderColor: colours.border,
+    borderWidth: 1,
+    borderRadius: radius,
+    overflow: 'hidden',
+  },
+  // The last row's line tucks under the border.
+  listInner: { marginBottom: -1 },
+  listItem: { borderBottomColor: colours.border, borderBottomWidth: 1 },
+  listRow: {
+    minHeight: 60,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+  },
+  rowTitle: { color: colours.text, fontFamily: fonts.semibold, fontSize: 16 },
+  rowDetail: { color: colours.textSecondary, fontFamily: fonts.regular, fontSize: 13 },
+  rowValue: { color: colours.textSecondary, fontFamily: fonts.medium, fontSize: 15, flexShrink: 1, textAlign: 'right' },
+  rowBig: { color: colours.text, fontFamily: fonts.display, fontSize: 28 },
+  rowBody: { paddingHorizontal: 14, paddingBottom: 14, gap: 10 },
+  listAdd: { color: colours.accent, fontFamily: fonts.semibold, fontSize: 15 },
   content: { padding: space.lg, gap: space.md },
   title: { color: colours.text, fontSize: 28, ...display },
   display: { color: colours.text, ...display },
   label: {
     color: colours.textSecondary,
-    fontFamily: fonts.semibold, fontSize: 13,
+    fontFamily: fonts.semibold,
+    fontSize: 13,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginTop: space.sm,
@@ -259,7 +397,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: radius,
     color: colours.text,
-    fontFamily: fonts.regular, fontSize: 17,
+    fontFamily: fonts.regular,
+    fontSize: 17,
     minHeight: 48,
     paddingHorizontal: space.md,
   },
