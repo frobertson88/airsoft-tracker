@@ -1,4 +1,4 @@
-// Random wounds (0011) on top of 0001–0010, in PGlite.
+// More medic rules: any number of hits, random wounds (0011) on top of 0001–0010, in PGlite.
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -175,6 +175,34 @@ test('in-order games work as before', async () => {
   s = await hit(pat);
   assert.equal((await scan(medic, pat, s.code)).wound.name, 'Arm wound');
   await treat(medic, pat, s.code);
+  s = await hit(pat);
+  assert.equal((await scan(mate, pat, s.code)).state, 'dead');
+  await endGame();
+});
+
+test('in-order sets take 1–5 wounds before Dead', async () => {
+  const bad = (hits) => rejects(as(admin, 'select save_medic_ruleset(null, $1, $2)', ['Bad', JSON.stringify({ ...RULES, hits })]), 'medic_rules_invalid');
+  await bad([RULES.hits[2]]);
+  await bad([...Array(6).fill(RULES.hits[0]), RULES.hits[2]]);
+  const four = [RULES.hits[0], RULES.hits[1], { ...RULES.hits[1], name: 'Chest wound' }, RULES.hits[1], RULES.hits[2]];
+  await one(admin, 'select save_medic_ruleset(null, $1, $2)', ['Five', JSON.stringify({ ...RULES, hits: four })]);
+  // One wound then dead: the 2nd hit is dead.
+  await setGame({ ...RULES, hits: [RULES.hits[0], RULES.hits[2]] });
+  let s = await hit(pat);
+  assert.equal((await scan(mate, pat, s.code)).wound.name, 'Leg wound');
+  await treat(mate, pat, s.code);
+  s = await hit(pat);
+  assert.equal((await scan(mate, pat, s.code)).state, 'dead');
+  await endGame();
+  // Four wounds: the 3rd hit is the chest wound, the 5th is dead.
+  await setGame({ ...RULES, hits: four });
+  for (let i = 1; i <= 4; i++) {
+    s = await hit(pat);
+    const r = await scan(medic, pat, s.code);
+    assert.equal(r.state, 'wounded');
+    if (i === 3) assert.equal(r.wound.name, 'Chest wound');
+    await treat(medic, pat, s.code);
+  }
   s = await hit(pat);
   assert.equal((await scan(mate, pat, s.code)).state, 'dead');
   await endGame();

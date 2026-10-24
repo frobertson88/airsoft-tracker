@@ -27,7 +27,7 @@ export interface Wound {
 }
 
 /**
- * Three hits (the last is death) and what happens when bleed-out reaches zero.
+ * 2–6 hits in order (the last is death) and what happens when bleed-out reaches zero.
  * A random set (0011_random_wounds.sql) also has a wound list: each hit before
  * dead_on picks one by chance.
  */
@@ -58,10 +58,9 @@ export const EXPIRY_LABEL: Record<MedicRules['expiry'], string> = {
   wait: 'Wait for help at bleed-out',
 };
 
-export const HIT_TABS = ['1st hit', '2nd hit', 'Dead'];
 export const BLEED_CHOICES = [5, 10, 15, 20, 30];
 export const DEAD_ON_CHOICES = [2, 3, 4, 5];
-export const ORDINAL = ['', '1st', '2nd', '3rd', '4th', '5th'];
+export const ORDINAL = ['', '1st', '2nd', '3rd', '4th', '5th', '6th'];
 
 export const isRandom = (r: MedicRules) => !!r.wounds?.length;
 

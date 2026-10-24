@@ -1,9 +1,9 @@
--- Random wounds for medic rules (Fraser, 24 October 2026; docs/medic-gameplay.md
--- Advanced/custom mode). A set may add a wound list: each hit before the "dead
--- on" hit picks one at random by its chance, and a fatal wound (a head shot)
--- is dead at once. The pick is stored on the life and never re-rolled.
--- Only adds: sets and games without a wound list work as before, and hits[]
--- stays three long so the published app can still read every set.
+-- More medic rules (Fraser, 24 October 2026; docs/medic-gameplay.md Random
+-- wounds). An in-order set may have 1–5 wounds before Dead (was always 2).
+-- A random set adds a wound list: each hit before its "dead on" hit picks one
+-- at random by its chance, and a fatal wound (a head shot) is dead at once.
+-- The pick is stored on the life and never re-rolled. Sets and games made
+-- before this work as before.
 
 -- The wound picked for this hit (null for an in-order set or the dead-on hit).
 alter table public.medic_lives add column wound jsonb;
@@ -45,8 +45,8 @@ end $$;
 
 -- part 2 ---------------------------------------------------------------------
 
--- {hits: [3 wounds, the last is death], expiry: dead|wait} as before, plus for
--- a random set {wounds: [1–12 random wounds], dead_on: 2–5}.
+-- {hits: [2–6 wounds, the last is death], expiry: dead|wait}, plus for a
+-- random set {wounds: [1–12 random wounds], dead_on: 2–5}.
 create or replace function public._medic_rules(p jsonb)
 returns jsonb language plpgsql immutable set search_path = '' as $$
 declare
@@ -55,7 +55,7 @@ declare
   v_dead text := p ->> 'dead_on';
 begin
   if p is null or jsonb_typeof(p) <> 'object' or jsonb_typeof(p -> 'hits') <> 'array'
-     or jsonb_array_length(p -> 'hits') <> 3 or coalesce(p ->> 'expiry', '') not in ('dead', 'wait') then
+     or jsonb_array_length(p -> 'hits') not between 2 and 6 or coalesce(p ->> 'expiry', '') not in ('dead', 'wait') then
     raise exception 'medic_rules_invalid';
   end if;
   select jsonb_agg(public._medic_wound(value, false) order by ordinality) into v_hits

@@ -12,7 +12,6 @@ import {
   chancePercents,
   DEAD_ON_CHOICES,
   HELPERS,
-  HIT_TABS,
   isRandom,
   ORDINAL,
   useMedicRulesets,
@@ -54,13 +53,24 @@ function Editor({ source, copy, isNew }: { source: MedicRuleset; copy: boolean; 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
-  const tabs = random ? ['Wounds', 'Dead'] : HIT_TABS;
+  const tabs = random
+    ? ['Wounds', 'Dead']
+    : rules.hits.map((_, i) => (i === rules.hits.length - 1 ? 'Dead' : `${ORDINAL[i + 1]} hit`));
   const dead = tab === tabs.length - 1;
   const hitIndex = dead ? rules.hits.length - 1 : tab;
   const setHit = (patch: Partial<Wound>) =>
     setRules((r) => ({ ...r, hits: r.hits.map((h, i) => (i === hitIndex ? { ...h, ...patch } : h)) }));
   const setWound = (index: number, patch: Partial<Wound>) =>
     setWounds((ws) => ws.map((w, i) => (i === index ? { ...w, ...patch } : w)));
+  // In order: 1–5 wounds before Dead. A new hit starts as a copy of this one.
+  const addHit = () => {
+    setRules((r) => ({ ...r, hits: [...r.hits.slice(0, tab + 1), { ...r.hits[tab] }, ...r.hits.slice(tab + 1)] }));
+    setTab(tab + 1);
+  };
+  const removeHit = () => {
+    setRules((r) => ({ ...r, hits: r.hits.filter((_, i) => i !== tab) }));
+    setTab(Math.max(0, tab - 1));
+  };
   const pickMode = (r: boolean) => {
     setRandom(r);
     setTab(0);
@@ -193,7 +203,9 @@ function Editor({ source, copy, isNew }: { source: MedicRuleset; copy: boolean; 
         </>
       ) : (
         <Card>
-          <Text style={styles.small}>{dead ? (random ? 'Dead' : 'Third hit') : 'Wound name'}</Text>
+          <Text style={styles.small}>
+            {dead ? (random ? 'Dead' : `${ORDINAL[rules.hits.length]} hit`) : 'Wound name'}
+          </Text>
           <Field
             value={rules.hits[hitIndex].name}
             onChangeText={(v) => setHit({ name: v })}
@@ -212,6 +224,12 @@ function Editor({ source, copy, isNew }: { source: MedicRuleset; copy: boolean; 
           <Text style={styles.small}>{dead ? 'Who can bring them back' : 'Who can treat it'}</Text>
           <HelperChips helpers={rules.hits[hitIndex].helpers} onChange={(helpers) => setHit({ helpers })} />
           <Text style={styles.help}>Medic means players whose role today is Medic, on the same team.</Text>
+          {!random && !dead && (
+            <Row>
+              {rules.hits.length < 6 && <Button title="Add a hit after this" variant="quiet" onPress={addHit} />}
+              {rules.hits.length > 2 && <Button title="Remove this hit" variant="quiet" onPress={removeHit} />}
+            </Row>
+          )}
           {random && (
             <>
               <Text style={styles.small}>Dead on hit</Text>
