@@ -70,7 +70,7 @@ The Map tab has a grid button. The grid is like a military map: 100 m squares nu
 - **4 figures**, such as `0412`, give a 100 m square.
 - **6 figures**, such as `041127`, give a 10 m spot.
 
-Mission cards show 6-figure references for each point.
+Mission cards show the 4-figure reference (the 100 m square) for each point.
 
 ## Limits
 
