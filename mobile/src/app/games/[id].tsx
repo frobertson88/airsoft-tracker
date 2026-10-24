@@ -94,6 +94,7 @@ export default function EditGame() {
             onChange={setPatrol}
             missionId={view}
             teamCount={teamCount}
+            onOpen={setView}
             onClose={() => setView('missions')}
           />
         )}

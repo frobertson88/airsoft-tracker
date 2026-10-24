@@ -20,7 +20,7 @@ Settings, in the list-row style:
 - **Game ends**: when time's up, when the first team finishes, or when every team finishes.
 - **Scoring**: on or off. With scoring on, the team with the most points wins (a tie is a draw).
 - **Points on players' maps**: any point can be hidden from players' maps for this game. Permanent points show by default. Admins in Host view still see every point, and everyone sees them all once the game is over.
-- **Missions**: one row showing how many missions there are. Tapping it opens the mission list, and each mission opens on its own screen like the medic rules editor: name and brief, a type, then one row per rule. Back steps out of a mission, then out of the list. Nothing is saved until **Save game**. **Add 5 random missions** fills in a quick set from the field's points. A mission can be moved up or down, duplicated or deleted.
+- **Missions**: one row showing how many missions there are. Tapping it opens the mission list, and each mission opens on its own screen like the medic rules editor, in short groups of rows that stay closed until tapped: the mission (name and brief, type, teams), Where (points, start), How it ends (done when, fails when) and Score and card (reward, clue and grid refs). Previous and Next step between missions. Back steps out of a mission, then out of the list. Nothing is saved until **Save game**. **Add 5 random missions** fills in a quick set from the field's points. A mission can be moved up or down, duplicated or deleted.
 
 ## Mission types
 
