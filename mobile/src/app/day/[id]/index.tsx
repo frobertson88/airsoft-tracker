@@ -3,8 +3,10 @@ import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { MemberRow } from '../../../components/MemberList';
 import { GameClock } from '../../../components/GameClock';
+import { PatrolCard } from '../../../components/PatrolPlay';
 import { Body, Button, Card, Display, Label, Screen } from '../../../components/ui';
 import { useDay } from '../../../lib/day';
+import { clockFor, useServerNow } from '../../../lib/game';
 import { chancePercents, EXPIRY_LABEL, helperText, medicOf, ORDINAL } from '../../../lib/medic';
 import { colours, space, teamColour, fonts } from '../../../theme';
 
@@ -14,6 +16,7 @@ const seenTeam = new Map<string, string | null>();
 export default function GameTab() {
   const { id, data, me, teamById, sectionById } = useDay();
   const [, refresh] = useState(0);
+  const now = useServerNow(1000);
   if (!data || !me) return null;
 
   // Picking a team yourself after having none isn't news.
@@ -60,7 +63,10 @@ export default function GameTab() {
       )}
 
       {data.game ? (
-        <GameClock game={data.game} />
+        <>
+          <GameClock game={data.game} />
+          {data.game.mode === 'patrol' && <PatrolCard game={data.game} clock={clockFor(data.game, now)} />}
+        </>
       ) : (
         <Card style={{ padding: space.lg, gap: space.md }}>
           <Text style={styles.kicker}>Next up</Text>

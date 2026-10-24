@@ -3,14 +3,16 @@
 // call tick_game when a countdown or a timed game should have moved on.
 import { useEffect, useState } from 'react';
 import type { MedicSettings } from './medic';
+import type { PatrolSettings } from './patrol';
 
 export type GameState = 'ready' | 'countdown' | 'live' | 'paused' | 'resuming' | 'complete';
 
-export type GameMode = 'free' | 'koth';
+export type GameMode = 'free' | 'koth' | 'patrol';
 
 export const MODE_LABEL: Record<GameMode, string> = {
   free: 'Free play',
   koth: 'King of the Hill',
+  patrol: 'Patrol',
 };
 
 /** KOTH settings as stored (supabase/migrations/0005_koth.sql fills defaults). */
@@ -23,6 +25,8 @@ export interface KothSettings {
   relocate_minutes: number | null;
   /** Any mode: the medic rules copied into this game, or null for off. */
   medic?: MedicSettings | null;
+  /** Patrol games: field, missions and options (lib/patrol.ts). */
+  patrol?: PatrolSettings;
 }
 
 export const KOTH_DEFAULTS: KothSettings = { radius: 25, scoring: true, rate: 1, relocate_minutes: null };
@@ -165,6 +169,10 @@ export function kothScores(k: KothState, g: Game, elapsed: number): Record<strin
 export function describeSettings(mode: GameMode, s: Partial<KothSettings>) {
   const teams = `${s.team_count ?? 2} teams`;
   const medic = s.medic ? `Medic: ${s.medic.name}` : null;
+  if (mode === 'patrol') {
+    const n = s.patrol?.missions.length ?? 0;
+    return [MODE_LABEL.patrol, teams, `${n} ${n === 1 ? 'mission' : 'missions'}`, medic].filter(Boolean).join(' · ');
+  }
   if (mode !== 'koth') return [MODE_LABEL.free, teams, medic].filter(Boolean).join(' · ');
   const k = { ...KOTH_DEFAULTS, ...s };
   return [

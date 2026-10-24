@@ -84,6 +84,8 @@ Follow [app flow](app-flow.md#8-start-pause-and-resume) for countdowns, pause/re
 
 Start with planned ordered Patrol missions, then template-generated Patrol. Add Defend, Capture and Deliver after their completion rules are agreed. The four primitives are the target scope; Patrol is the smallest usable slice.
 
+Built: see [patrol.md](patrol.md) for the Patrol game as built on 24 October 2026.
+
 ### Agreed Patrol rules
 
 - Mission progress belongs to the assigned team, not a section or individual. Any admitted, in-play member of that team may scan the required point; successive steps need not use the same player.

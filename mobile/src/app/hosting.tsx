@@ -17,6 +17,12 @@ export default function Hosting() {
           onPress={() => router.push('/fields')}
         />
         <ListRow
+          title="Games"
+          detail="Set up games before the day, including Patrol missions"
+          left={<Ionicons name="flag-outline" size={20} color={colours.accent} />}
+          onPress={() => router.push('/games')}
+        />
+        <ListRow
           title="Medic rules"
           detail="Wounds, who can treat them and bleed-out"
           left={<Ionicons name="medkit-outline" size={20} color={colours.accent} />}

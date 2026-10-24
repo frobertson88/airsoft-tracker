@@ -16,6 +16,7 @@ import {
   type FieldData,
   type FieldView,
 } from '../lib/field';
+import { gridLabel, gridLines } from '../lib/grid';
 import { bearing, offset, type MapObjectKind } from '../lib/mapTools';
 import { colours, fonts, space } from '../theme';
 
@@ -94,6 +95,8 @@ export interface FieldMapProps {
   onLongPress?: (c: Coord) => void;
   onViewChange?: (v: FieldView) => void;
   showsUserLocation?: boolean;
+  /** The 100 m map grid, numbered along the bottom and left (lib/grid.ts). */
+  grid?: boolean;
   style?: ViewStyle;
 }
 
@@ -139,6 +142,7 @@ export const FieldMap = forwardRef<FieldMapHandle, FieldMapProps>(function Field
     onLongPress,
     onViewChange,
     showsUserLocation,
+    grid,
     style,
   },
   ref,
@@ -240,6 +244,8 @@ export const FieldMap = forwardRef<FieldMapHandle, FieldMapProps>(function Field
       {outlinesAsLines && data.boundary.length >= 3 && (
         <Polyline coordinates={closed(data.boundary)} strokeColor={colours.accent} strokeWidth={3} />
       )}
+
+      {grid && <GridOverlay data={data} />}
 
       {data.areas.map((a, i) => (
         <Polygon
@@ -604,7 +610,59 @@ function Drawing({
   );
 }
 
+// The map grid: thin lines every 100 m, square numbers just outside the
+// bottom (eastings) and left (northings) edges.
+function GridOverlay({ data }: { data: FieldData }) {
+  const { eastings, northings } = gridLines(data);
+  if (!eastings.length || !northings.length) return null;
+  const bottom = eastings[0].points[0].lat;
+  const left = northings[0].points[0].lng;
+  const line = 'rgba(232,236,228,0.45)';
+  // Labels sit in the middle of each square.
+  const halfLng = eastings.length > 1 ? (eastings[1].points[0].lng - left) / 2 : 0;
+  const halfLat = northings.length > 1 ? (northings[1].points[0].lat - bottom) / 2 : 0;
+  return (
+    <>
+      {eastings.map((l) => (
+        <Polyline key={`ge-${l.n}`} coordinates={l.points.map(toLatLng)} strokeColor={line} strokeWidth={1} zIndex={1} />
+      ))}
+      {northings.map((l) => (
+        <Polyline key={`gn-${l.n}`} coordinates={l.points.map(toLatLng)} strokeColor={line} strokeWidth={1} zIndex={1} />
+      ))}
+      {eastings.slice(0, -1).map((l) => (
+        <Marker
+          key={`gel-${l.n}`}
+          coordinate={{ latitude: bottom, longitude: l.points[0].lng + halfLng }}
+          anchor={{ x: 0.5, y: 0 }}
+          tracksViewChanges={false}
+        >
+          <Text style={styles.gridLabel}>{gridLabel(l.n)}</Text>
+        </Marker>
+      ))}
+      {northings.slice(0, -1).map((l) => (
+        <Marker
+          key={`gnl-${l.n}`}
+          coordinate={{ latitude: l.points[0].lat + halfLat, longitude: left }}
+          anchor={{ x: 1, y: 0.5 }}
+          tracksViewChanges={false}
+        >
+          <Text style={styles.gridLabel}>{gridLabel(l.n)}</Text>
+        </Marker>
+      ))}
+    </>
+  );
+}
+
 const styles = StyleSheet.create({
+  gridLabel: {
+    color: colours.text,
+    fontFamily: fonts.semibold,
+    fontSize: 11,
+    paddingHorizontal: 3,
+    fontVariant: ['tabular-nums'],
+    textShadowColor: 'rgba(0,0,0,0.9)',
+    textShadowRadius: 3,
+  },
   map: { flex: 1 },
   areaLabel: {
     backgroundColor: 'rgba(11,16,12,0.85)',

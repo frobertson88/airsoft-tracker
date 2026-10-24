@@ -15,6 +15,7 @@ import {
   type KothState,
 } from '../lib/game';
 import { colours, fonts, radius, space, teamColour } from '../theme';
+import { PatrolScores } from './PatrolPlay';
 
 const STATE_COLOUR = {
   ready: colours.textSecondary,
@@ -70,6 +71,7 @@ export function GameClock({ game }: { game: Game }) {
       </Text>
       {c.state === 'ready' && <Text style={styles.caption}>Waiting for the host to start</Text>}
       {game.mode === 'koth' && <KothPanel game={game} clock={c} />}
+      {game.mode === 'patrol' && <PatrolScores game={game} clock={c} />}
     </View>
   );
 }

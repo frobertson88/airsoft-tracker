@@ -11,6 +11,7 @@ import { useDay } from '../../../lib/day';
 import { clockFor, formatClock, useServerNow, type Game } from '../../../lib/game';
 import { bleedLeft, decodeCode, helperText, medicOf, type MedicSettings, type ScanResult } from '../../../lib/medic';
 import { parseTag, type TagLookup } from '../../../lib/tags';
+import { patrolOf, pointTitle, type PatrolScan } from '../../../lib/patrol';
 import { colours, fonts, radius, space } from '../../../theme';
 
 interface Scanned {
@@ -44,25 +45,30 @@ export default function ScanTab() {
         : state !== 'live'
           ? 'Treating players works while the game is live.'
           : '';
-  return <Scanner game={game} medic={medicNote ? null : medic} medicNote={medicNote} now={now} />;
+  return (
+    <Scanner game={game} live={state === 'live'} medic={medicNote ? null : medic} medicNote={medicNote} now={now} />
+  );
 }
 
 function Scanner({
   game,
+  live,
   medic,
   medicNote,
   now,
 }: {
   game: Game | null;
+  live: boolean;
   medic: MedicSettings | null;
   medicNote: string;
   now: number;
 }) {
-  const { id: dayId, callsign, reload } = useDay();
+  const { id: dayId, data, me, callsign, reload } = useDay();
   const focused = useIsFocused();
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState<Scanned | null>(null);
   const [tag, setTag] = useState<TagLookup | null>(null);
+  const [patrolResult, setPatrolResult] = useState<PatrolScan | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [done, setDone] = useState('');
@@ -79,6 +85,15 @@ function Scanner({
     try {
       if (code) {
         setBusy(true);
+        // In a live Patrol game, a player on a team scans points for missions.
+        if (game?.mode === 'patrol' && live && me?.team_id) {
+          const r = await api.patrolScan(game.id, code);
+          if (r.result !== 'not_here') {
+            setPatrolResult(r);
+            reload();
+            return;
+          }
+        }
         setTag(await api.lookupTag(code, dayId));
         return;
       }
@@ -102,6 +117,7 @@ function Scanner({
   const reset = () => {
     setScanned(null);
     setTag(null);
+    setPatrolResult(null);
     setError('');
     handling.current = false;
   };
@@ -138,6 +154,38 @@ function Scanner({
         <Body>The camera scans a hit player’s code so you can treat them, and the QR codes on field points.</Body>
         <Button title="Allow camera" onPress={requestPermission} />
         {!permission.canAskAgain && <Body muted>Turn the camera on for this app in your phone’s settings.</Body>}
+      </Screen>
+    );
+  }
+
+  if (patrolResult && game) {
+    const r = patrolResult;
+    const s = patrolOf(game);
+    const m = s?.missions.find((x) => x.id === r.mission);
+    const field = data?.field?.data;
+    const [kicker, title, text] =
+      r.result === 'complete'
+        ? ['Mission complete', m?.name ?? 'Mission', `+${r.reward ?? 0} points. Your next mission is on the Game tab.`]
+        : r.result === 'step'
+          ? [pointTitle(field, r.point), 'Got it', `${m?.name ?? 'Mission'}: see the Game tab for the next point.`]
+          : r.result === 'new'
+            ? ['New mission', m?.name ?? 'Mission', m?.brief || 'See the Game tab for where to go.']
+            : r.result === 'wrong'
+              ? [pointTitle(field, r.point), 'Not this one', `${m?.name ?? 'Your mission'} needs ${pointTitle(field, r.need)}.`]
+              : r.result === 'already'
+                ? [pointTitle(field, r.point), 'Already scanned', 'Your team has this point for the mission.']
+                : r.result === 'busy'
+                  ? ['Busy', 'Finish your mission first', `${m?.name ?? 'Your mission'} is still in play.`]
+                  : [pointTitle(field, r.point), 'No mission here', 'Nothing for your team at this point right now.'];
+    const good = r.result === 'complete' || r.result === 'step' || r.result === 'new';
+    return (
+      <Screen>
+        <Text style={styles.kicker}>{kicker}</Text>
+        <Display size={36} colour={good ? colours.accent : colours.text}>
+          {title}
+        </Display>
+        <Body>{text}</Body>
+        <Button title="Scan another" variant="secondary" onPress={reset} />
       </Screen>
     );
   }

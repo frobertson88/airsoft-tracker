@@ -16,6 +16,7 @@ import type { Coord } from '../../../lib/field';
 import { useDay } from '../../../lib/day';
 import { clockFor, kothSettings, useServerNow } from '../../../lib/game';
 import { useMapObjects } from '../../../lib/mapTools';
+import { patrolOf } from '../../../lib/patrol';
 import { statusLabel, useMedic } from '../../../lib/medic';
 import { ageLabel, HIDDEN_MS, STALE_MS, usePositions } from '../../../lib/positions';
 import { TRACKING_LABEL, useTracking } from '../../../lib/tracking';
@@ -31,6 +32,7 @@ export default function MapTab() {
   const [hillSpot, setHillSpot] = useState<Coord | null>(null);
   const [moving, setMoving] = useState(false);
   const [moveError, setMoveError] = useState('');
+  const [showGrid, setShowGrid] = useState(false);
   // Re-read positions when who's on which team changes.
   const membersKey = data?.members.map((m) => `${m.user_id}:${m.status}:${m.team_id}`).join(',');
   const positions = usePositions(id, membersKey);
@@ -94,6 +96,17 @@ export default function MapTab() {
     };
   }, [data, now, teamById]);
 
+  // In a Patrol game, points the host hid stay off players' maps until it ends.
+  // Admins in Host view see them all.
+  const mapData = useMemo(() => {
+    const fieldData = data?.field?.data;
+    const patrol = patrolOf(data?.game ?? null);
+    if (!fieldData || !patrol?.hidden.length || !data?.game) return fieldData;
+    if (clockFor(data.game, now).state === 'complete' || (isAdmin && me?.map_host_view)) return fieldData;
+    const hidden = new Set(patrol.hidden);
+    return { ...fieldData, points: fieldData.points.filter((p) => !p.id || !hidden.has(p.id)) };
+  }, [data, now, isAdmin, me]);
+
   const canMoveHill = isAdmin && !!hill && !!data?.game;
   const moveHillHere = async () => {
     if (!hillSpot || !data?.game) return;
@@ -133,7 +146,7 @@ export default function MapTab() {
 
   return (
     <View style={styles.screen}>
-      <FieldMap ref={mapRef} data={field.data} players={players}
+      <FieldMap ref={mapRef} data={mapData ?? field.data} players={players} grid={showGrid}
         drawings={tools.drawings}
         selectedId={tools.selectedId}
         onDrawingPress={tools.onDrawingPress}
@@ -216,6 +229,14 @@ export default function MapTab() {
             <Ionicons name="flag" size={22} color={hill.colour} />
           </Pressable>
         )}
+        <Pressable
+          onPress={() => setShowGrid((v) => !v)}
+          accessibilityRole="button"
+          accessibilityLabel={showGrid ? 'Hide map grid' : 'Show map grid'}
+          style={[styles.fab, showGrid && { borderColor: colours.accent }]}
+        >
+          <Ionicons name="grid-outline" size={22} color={showGrid ? colours.accent : colours.text} />
+        </Pressable>
         <Pressable onPress={() => mapRef.current?.fit()} accessibilityRole="button" accessibilityLabel="Show whole field" style={styles.fab}>
           <Ionicons name="scan-outline" size={22} color={colours.text} />
         </Pressable>

@@ -38,6 +38,8 @@ function RootStack() {
         <Stack.Screen name="fields/index" options={{ title: 'Fields' }} />
         <Stack.Screen name="fields/[id]" options={{ title: 'Field' }} />
         <Stack.Screen name="tags/[field]" options={{ title: 'QR codes' }} />
+        <Stack.Screen name="games/index" options={{ title: 'Games' }} />
+        <Stack.Screen name="games/[id]" options={{ title: 'Game' }} />
         <Stack.Screen name="medic/index" options={{ title: 'Medic rules' }} />
         <Stack.Screen name="medic/[id]" options={{ title: 'Medic rules' }} />
         <Stack.Screen name="day/[id]" options={{ headerShown: false }} />

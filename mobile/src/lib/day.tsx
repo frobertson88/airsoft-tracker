@@ -16,6 +16,7 @@ import { useAuth } from './auth';
 import { supabase } from './supabase';
 import type { DayField } from './field';
 import { setServerOffset, type Game, type KothState } from './game';
+import type { PatrolTeam } from './patrol';
 import type { DayMember, GameDay, Section, Team } from './types';
 
 export interface DayData {
@@ -33,6 +34,8 @@ export interface DayData {
   game: Game | null;
   /** The hill for a started King of the Hill game, else null. */
   koth: KothState | null;
+  /** Each team's progress in a started Patrol game, else empty. */
+  patrol: PatrolTeam[];
 }
 
 interface DayState {
@@ -69,6 +72,10 @@ async function fetchDay(id: string): Promise<DayData> {
     latest?.mode === 'koth'
       ? await supabase.from('koth_state').select('*').eq('game_id', latest.id).maybeSingle()
       : { data: null };
+  const patrol =
+    latest?.mode === 'patrol'
+      ? await supabase.from('patrol_teams').select('*').eq('game_id', latest.id)
+      : { data: [] };
 
   const ids = (members.data ?? []).map((m) => m.user_id);
   const profiles = ids.length
@@ -87,6 +94,7 @@ async function fetchDay(id: string): Promise<DayData> {
     field: (field.data ?? null) as DayField | null,
     game: latest,
     koth: (koth.data ?? null) as KothState | null,
+    patrol: (patrol.data ?? []) as PatrolTeam[],
   };
 }
 
@@ -129,6 +137,7 @@ export function DayProvider({ id, children }: { id: string; children: ReactNode 
       .on('postgres_changes', { event: '*', schema: 'public', table: 'day_fields', filter }, scheduleReload)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'games', filter }, scheduleReload)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'koth_state', filter }, scheduleReload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'patrol_teams', filter }, scheduleReload)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'game_days', filter: `id=eq.${id}` }, scheduleReload)
       .subscribe();
     const appState = AppState.addEventListener('change', (s) => {

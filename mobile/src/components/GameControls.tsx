@@ -15,13 +15,15 @@ import {
   type GameMode,
   type KothSettings,
 } from '../lib/game';
+import { ENDING_LABEL, ORDER_LABEL } from '../lib/patrol';
 import { BLEED_CHOICES, helperText, isRandom, rulesSummary, settingsFor, useMedicRulesets, type MedicSettings } from '../lib/medic';
 import { supabase } from '../lib/supabase';
 import { colours, fonts, space } from '../theme';
 import { GameClock } from './GameClock';
+import { PatrolHost } from './PatrolPlay';
 import { Body, Button, Chip, ConfirmButton, ErrorText, Field, Label, List, ListRow, Row, useOpenRow } from './ui';
 
-const LENGTHS: { label: string; seconds: number | null }[] = [
+export const LENGTHS: { label: string; seconds: number | null }[] = [
   { label: '10 min', seconds: 600 },
   { label: '15 min', seconds: 900 },
   { label: '20 min', seconds: 1200 },
@@ -30,7 +32,7 @@ const LENGTHS: { label: string; seconds: number | null }[] = [
   { label: '60 min', seconds: 3600 },
   { label: 'Unlimited', seconds: null },
 ];
-const COUNTDOWNS = [
+export const COUNTDOWNS = [
   { label: 'Off', seconds: 0 },
   { label: '10s', seconds: 10 },
   { label: '30s', seconds: 30 },
@@ -197,7 +199,7 @@ function GameSetup({ game, onDone }: { game: Game | null; onDone?: () => void })
           onPress={() => rows.toggle('mode')}
         >
           <Row style={styles.wrap}>
-            {(['free', 'koth'] as GameMode[]).map((m) => (
+            {(['free', 'koth', 'patrol'] as GameMode[]).map((m) => (
               <Chip
                 key={m}
                 label={MODE_LABEL[m]}
@@ -208,6 +210,12 @@ function GameSetup({ game, onDone }: { game: Game | null; onDone?: () => void })
               />
             ))}
           </Row>
+          {c.mode === 'patrol' && (
+            <Text style={styles.help}>
+              Teams scan points to complete missions. Build Patrol games and their missions in Hosting, Games, then pick
+              one under Your setups.
+            </Text>
+          )}
           {c.mode === 'koth' && (
             <Text style={styles.help}>
               A hill appears at a random spot on the field. The team with the most players inside holds it and scores
@@ -276,6 +284,22 @@ function GameSetup({ game, onDone }: { game: Game | null; onDone?: () => void })
             ))}
           </Row>
         </ListRow>
+
+        {c.mode === 'patrol' && (
+          <ListRow
+            title="Missions"
+            detail={
+              !c.settings.patrol
+                ? 'Pick a Patrol game under Your setups'
+                : data?.field?.field_id !== c.settings.patrol.field
+                  ? 'Built for a different field from today’s. Edit it in Hosting, Games.'
+                  : `${ORDER_LABEL[c.settings.patrol.order]} · ends: ${ENDING_LABEL[c.settings.patrol.ending].toLowerCase()}`
+            }
+            value={String(c.settings.patrol?.missions.length ?? 0)}
+            big
+            valueColour={!c.settings.patrol || data?.field?.field_id !== c.settings.patrol.field ? colours.danger : undefined}
+          />
+        )}
 
         {c.mode === 'koth' && (
           <>
@@ -429,6 +453,7 @@ export function GameControls() {
     <>
       <Label>{state === 'complete' ? 'Last game' : 'Game'}</Label>
       <GameClock game={game} />
+      {game.mode === 'patrol' && state !== 'ready' && <PatrolHost game={game} clock={clockFor(game, now)} />}
       <View style={styles.actions}>
         {state === 'ready' && (
           <>
