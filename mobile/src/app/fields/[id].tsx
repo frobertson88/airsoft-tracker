@@ -53,6 +53,7 @@ export default function FieldEditor() {
   const [notes, setNotes] = useState('');
   const [data, setData] = useState<FieldData>({ view: DEFAULT_VIEW, boundary: [], areas: [], points: [] });
   const view = useRef<FieldView>(DEFAULT_VIEW);
+  const mapSize = useRef({ width: 0, height: 0 });
 
   const [tool, setTool] = useState<Tool | null>(null);
   const [draft, setDraft] = useState<Coord[]>([]);
@@ -121,6 +122,12 @@ export default function FieldEditor() {
   };
 
   const onMapPress = (c: Coord) => {
+    // A tap close to a point picks it rather than dropping a new one beside it.
+    const near = nearestPoint(c);
+    if (near !== null && !((tool && tool !== 'point') || pendingArea)) {
+      setSelectedPoint(near);
+      return;
+    }
     if (selectedPoint !== null) {
       setSelectedPoint(null);
       return;
@@ -175,7 +182,26 @@ export default function FieldEditor() {
   const onPointPress = (i: number) => {
     // Not while drawing a shape or naming an area.
     if ((tool && tool !== 'point') || pendingArea) return;
-    setSelectedPoint(i === selectedPoint ? null : i);
+    setSelectedPoint(i);
+  };
+
+  // The point within about a fingertip (32 points on screen) of a tap, if any.
+  const nearestPoint = (c: Coord) => {
+    const { width, height } = mapSize.current;
+    const v = view.current;
+    if (!width || !height || !v) return null;
+    let best: number | null = null;
+    let bestDist = 32;
+    data.points.forEach((p, i) => {
+      const dx = ((p.lng - c.lng) / v.lngDelta) * width;
+      const dy = ((p.lat - c.lat) / v.latDelta) * height;
+      const dist = Math.hypot(dx, dy);
+      if (dist < bestDist) {
+        best = i;
+        bestDist = dist;
+      }
+    });
+    return best;
   };
 
   const undoPoint = () => {
@@ -239,7 +265,12 @@ export default function FieldEditor() {
   return (
     <SafeAreaView style={styles.screen} edges={['bottom']}>
       <Stack.Screen options={{ title: isNew ? 'New field' : 'Edit field' }} />
-      <View style={styles.mapWrap}>
+      <View
+        style={styles.mapWrap}
+        onLayout={(e) => {
+          mapSize.current = { width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height };
+        }}
+      >
         <FieldMap
           ref={mapRef}
           data={data}

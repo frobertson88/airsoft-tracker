@@ -204,6 +204,13 @@ export const FieldMap = forwardRef<FieldMapHandle, FieldMapProps>(function Field
         onPress
           ? (e) => {
               const action = (e.nativeEvent as { action?: string }).action;
+              // A tap on a field point also arrives here; pick it, in case the marker's own press didn't fire.
+              if (action === 'marker-press' && onPointPress) {
+                const { latitude, longitude } = e.nativeEvent.coordinate;
+                const i = data.points.findIndex((p) => Math.abs(p.lat - latitude) < 1e-7 && Math.abs(p.lng - longitude) < 1e-7);
+                if (i >= 0) onPointPress(i);
+                return;
+              }
               if (action === 'marker-press' || action === 'polyline-press' || action === 'polygon-press') return;
               if (Date.now() - lastDrawingPress.current < 400) return;
               onPress({ lat: e.nativeEvent.coordinate.latitude, lng: e.nativeEvent.coordinate.longitude });
