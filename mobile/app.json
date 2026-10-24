@@ -18,7 +18,12 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "nz.fraser.airsofttracker"
+      "package": "nz.fraser.airsofttracker",
+      "permissions": [
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.CAMERA"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -44,6 +49,16 @@
     "backgroundColor": "#0B100C",
     "runtimeVersion": {
       "policy": "sdkVersion"
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "bbf05722-5c1a-4273-b32d-3e952384e69b"
+      }
+    },
+    "owner": "frobertsons-team",
+    "updates": {
+      "url": "https://u.expo.dev/bbf05722-5c1a-4273-b32d-3e952384e69b"
     }
   }
 }
