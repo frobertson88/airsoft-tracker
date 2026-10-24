@@ -93,9 +93,8 @@ export interface FieldMapProps {
 }
 
 const toLatLng = (c: Coord) => ({ latitude: c.lat, longitude: c.lng });
-// The iPhone's map picture only draws lines, not shapes, so there the outlines
-// are drawn as closed lines and the shapes keep just their fill.
-const outlinesAsLines = Platform.OS === 'ios';
+// The iPhone's map picture only draws lines, not shapes, so while it's taken
+// the outlines are traced again as closed lines.
 const closed = (pts: Coord[]) => [...pts, pts[0]].map(toLatLng);
 
 const toRegion = (v: FieldView): Region => ({
@@ -140,6 +139,8 @@ export const FieldMap = forwardRef<FieldMapHandle, FieldMapProps>(function Field
   // Tapping a drawing can also reach the map's own onPress; ignore that echo.
   const lastDrawingPress = useRef(0);
   const size = useRef({ width: 0, height: 0 });
+  const [picturing, setPicturing] = useState(false);
+  const outlinesAsLines = picturing && Platform.OS === 'ios';
   const fieldRegion = () => {
     const all = data.boundary.length ? data.boundary : data.points;
     return toRegion(all.length ? viewFor(all, data.view) : data.view);
@@ -153,6 +154,7 @@ export const FieldMap = forwardRef<FieldMapHandle, FieldMapProps>(function Field
       if (!m || !width || !height) return null;
       const region = fieldRegion();
       m.animateToRegion(region, 0);
+      setPicturing(true);
       // Give the satellite tiles a moment to load at the new view.
       await new Promise((r) => setTimeout(r, 1500));
       try {
@@ -170,6 +172,8 @@ export const FieldMap = forwardRef<FieldMapHandle, FieldMapProps>(function Field
         return `data:image/jpeg;base64,${b64}`;
       } catch {
         return null;
+      } finally {
+        setPicturing(false);
       }
     },
   }));
@@ -215,7 +219,7 @@ export const FieldMap = forwardRef<FieldMapHandle, FieldMapProps>(function Field
           coordinates={data.boundary.map(toLatLng)}
           strokeColor={colours.accent}
           fillColor="rgba(168,197,142,0.08)"
-          strokeWidth={outlinesAsLines ? 0 : 3}
+          strokeWidth={3}
         />
       )}
       {outlinesAsLines && data.boundary.length >= 3 && (
@@ -228,7 +232,7 @@ export const FieldMap = forwardRef<FieldMapHandle, FieldMapProps>(function Field
           coordinates={a.points.map(toLatLng)}
           strokeColor={AREA_STYLE[a.kind].stroke}
           fillColor={AREA_STYLE[a.kind].fill}
-          strokeWidth={outlinesAsLines ? 0 : 2}
+          strokeWidth={2}
           lineDashPattern={AREA_STYLE[a.kind].dash}
         />
       ))}
