@@ -1,11 +1,13 @@
 // Edit a saved game (Hosting → Games). Name, type, teams, length and
 // countdown here; Patrol games also get their field, options and missions.
+// Missions open as their own screens inside this one (so nothing is saved
+// until Save game); Back steps out of a mission, then out of the list.
 // King of the Hill and medic options are set in the Host tab and kept as saved.
-import { router, Stack, useLocalSearchParams } from 'expo-router';
+import { router, Stack, useLocalSearchParams, useNavigation } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { COUNTDOWNS, LENGTHS } from '../../components/GameControls';
-import { PATROL_DEFAULTS, PatrolRows } from '../../components/PatrolEditor';
+import { MissionEditor, MissionList, PATROL_DEFAULTS, PatrolRows } from '../../components/PatrolEditor';
 import { Button, Chip, ErrorText, Field, List, ListRow, Loading, Row, Screen, useOpenRow } from '../../components/ui';
 import { api, friendlyError, type GameConfig } from '../../lib/api';
 import { KOTH_DEFAULTS, MODE_LABEL, type GameMode } from '../../lib/game';
@@ -28,6 +30,18 @@ export default function EditGame() {
       : null,
   );
   const rows = useOpenRow<string>();
+  // null = the game's settings, 'missions' = the mission list, else a mission id.
+  const [view, setView] = useState<string | null>(null);
+  const navigation = useNavigation();
+  useEffect(
+    () =>
+      navigation.addListener('beforeRemove', (e) => {
+        if (view === null) return;
+        e.preventDefault();
+        setView(view === 'missions' ? null : 'missions');
+      }),
+    [navigation, view],
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -62,6 +76,30 @@ export default function EditGame() {
       setBusy(false);
     }
   };
+
+  const setPatrol = (p: Partial<PatrolSettings>) => set({ settings: { ...c.settings, patrol: p as PatrolSettings } });
+  if (c.mode === 'patrol' && view !== null) {
+    const mission = patrol?.missions.find((m) => m.id === view);
+    return (
+      <Screen key={view}>
+        <Stack.Screen options={{ title: view === 'missions' ? 'Missions' : mission?.name || 'Mission' }} />
+        {view === 'missions' ? (
+          <>
+            <MissionList value={patrol} onChange={setPatrol} onOpen={setView} />
+            <Button title="Back to the game" onPress={() => setView(null)} />
+          </>
+        ) : (
+          <MissionEditor
+            value={patrol}
+            onChange={setPatrol}
+            missionId={view}
+            teamCount={teamCount}
+            onClose={() => setView('missions')}
+          />
+        )}
+      </Screen>
+    );
+  }
 
   return (
     <Screen>
@@ -123,12 +161,7 @@ export default function EditGame() {
           </Row>
         </ListRow>
         {c.mode === 'patrol' && (
-          <PatrolRows
-            value={patrol}
-            teamCount={teamCount}
-            rows={rows}
-            onChange={(p) => set({ settings: { ...c.settings, patrol: p as PatrolSettings } })}
-          />
+          <PatrolRows value={patrol} rows={rows} onChange={setPatrol} onOpenMissions={() => setView('missions')} />
         )}
       </List>
       <View style={{ gap: space.sm }}>

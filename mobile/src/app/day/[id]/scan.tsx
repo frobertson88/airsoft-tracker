@@ -166,18 +166,38 @@ function Scanner({
     const [kicker, title, text] =
       r.result === 'complete'
         ? ['Mission complete', m?.name ?? 'Mission', `+${r.reward ?? 0} points. Your next mission is on the Game tab.`]
+        : r.result === 'step' && r.need
+          ? [pointTitle(field, r.point), 'Got it', `All points done. Now scan ${pointTitle(field, r.need)} to finish.`]
         : r.result === 'step'
           ? [pointTitle(field, r.point), 'Got it', `${m?.name ?? 'Mission'}: see the Game tab for the next point.`]
+          : r.result === 'ready'
+            ? [
+                pointTitle(field, r.point),
+                'Points done',
+                m?.hold
+                  ? `Hold for ${m.hold} min, then your section lead reports it done on the Game tab.`
+                  : 'Your section lead reports it done on the Game tab.',
+              ]
           : r.result === 'new'
             ? ['New mission', m?.name ?? 'Mission', m?.brief || 'See the Game tab for where to go.']
             : r.result === 'wrong'
-              ? [pointTitle(field, r.point), 'Not this one', `${m?.name ?? 'Your mission'} needs ${pointTitle(field, r.need)}.`]
+              ? [
+                  pointTitle(field, r.point),
+                  'Not this one',
+                  r.need
+                    ? `${m?.name ?? 'Your mission'} needs ${pointTitle(field, r.need)}.`
+                    : `${m?.name ?? 'Your mission'} has all its points. Your section lead reports it done.`,
+                ]
               : r.result === 'already'
-                ? [pointTitle(field, r.point), 'Already scanned', 'Your team has this point for the mission.']
+                ? [
+                    pointTitle(field, r.point),
+                    'Already scanned',
+                    r.need ? `Now scan ${pointTitle(field, r.need)} to finish.` : 'Your team has this point for the mission.',
+                  ]
                 : r.result === 'busy'
                   ? ['Busy', 'Finish your mission first', `${m?.name ?? 'Your mission'} is still in play.`]
                   : [pointTitle(field, r.point), 'No mission here', 'Nothing for your team at this point right now.'];
-    const good = r.result === 'complete' || r.result === 'step' || r.result === 'new';
+    const good = r.result === 'complete' || r.result === 'step' || r.result === 'new' || r.result === 'ready';
     return (
       <Screen>
         <Text style={styles.kicker}>{kicker}</Text>

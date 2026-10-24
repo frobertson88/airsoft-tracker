@@ -1,4 +1,4 @@
-// Patrol (0013) on top of 0001–0012, in PGlite: settings, team lists,
+// Patrol (0013, 0014) on top of 0001–0012, in PGlite: settings, team lists,
 // scanning steps in order, locked missions, timers and endings.
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
@@ -60,7 +60,7 @@ before(async () => {
   await db.exec(SUPABASE_STUB);
   for (const f of ['0001_stage1.sql', '0002_section_leads.sql', '0003_fields.sql', '0004_games.sql', '0005_koth.sql',
     '0006_teams_and_hill.sql', '0007_team_colours.sql', '0008_map_objects.sql', '0009_medic.sql',
-    '0010_field_preview.sql', '0011_random_wounds.sql', '0012_tags.sql', '0013_patrol.sql']) {
+    '0010_field_preview.sql', '0011_random_wounds.sql', '0012_tags.sql', '0013_patrol.sql', '0014_patrol_missions.sql']) {
     await db.exec(read(f));
   }
   const all = [admin, pat, mate, enemy];
@@ -206,4 +206,78 @@ test('players read team progress but cannot write it', async () => {
   assert.equal((await as(enemy, 'select * from patrol_teams where game_id=$1', [game])).length, 2);
   await as(enemy, 'update patrol_teams set score = 999 where game_id=$1', [game]).catch(() => {});
   assert.notEqual((await team(red)).score, 999);
+});
+
+// 0014: mission types, finish points, leads reporting and admins marking.
+const live = (g) => db.query(`update games set live_since = live_since - interval '2 minutes' where id = $1`, [g]);
+
+test('finish points, reported missions and holds are checked', async () => {
+  await rejects(create(patrol([mission('m', [P[1]], { done: 'finish' })])), 'patrol_mission_invalid');
+  await rejects(create(patrol([mission('m', [P[1]], { done: 'finish', finish: P[1] })])), 'patrol_mission_invalid');
+  await rejects(create(patrol([mission('m', [])])), 'patrol_mission_invalid');
+  await rejects(create(patrol([mission('m', [P[1]], { hold: 5 })])), 'patrol_mission_invalid');
+  await rejects(create(patrol([mission('m', [P[1]], { type: 'ambush' })])), 'patrol_mission_invalid');
+  const g = await create(patrol([mission('task', [], { type: 'task', done: 'host' })]));
+  const s = (await db.query('select settings from games where id=$1', [g])).rows[0].settings;
+  assert.equal(s.patrol.missions[0].done, 'host');
+  assert.equal(s.patrol.missions[0].type, 'task');
+  await db.exec(`delete from games where id = '${g}'`);
+});
+
+test('a courier mission ends at its finish point', async () => {
+  game = await create(patrol([mission('courier', [P[1]], { type: 'courier', done: 'finish', finish: P[3], reward: 30 })]));
+  await as(admin, 'select start_game($1)', [game]);
+  assert.deepEqual(await scan(pat, 3), { result: 'wrong', mission: 'courier', point: P[3], need: P[1] });
+  assert.deepEqual(await scan(pat, 1), { result: 'step', mission: 'courier', point: P[1], need: P[3] });
+  assert.equal((await scan(pat, 2)).need, P[3]);
+  assert.equal((await scan(pat, 3)).result, 'complete');
+  assert.equal((await team(blue)).score, 30);
+  await as(admin, 'select end_game($1)', [game]);
+});
+
+test('a section lead reports and aborts; an admin accepts, rejects, marks and skips', async () => {
+  await as(pat, 'select create_section($1, $2)', [day, 'Alpha']);
+  game = await create(patrol([
+    mission('hold', [P[2]], { type: 'hold', done: 'leader', hold: 1, reward: 40 }),
+    mission('task', [], { type: 'task', done: 'host', reward: 25 }),
+    mission('last', [P[4]]),
+  ]));
+  await as(admin, 'select start_game($1)', [game]);
+  const report = (u) => one(u, 'select patrol_report($1)', [game]);
+
+  await rejects(report(mate), 'not_section_lead');
+  await rejects(report(pat), 'patrol_not_ready');
+  assert.equal((await scan(mate, 2)).result, 'ready');
+  await rejects(report(pat), 'patrol_hold_running');
+  await live(game);
+  assert.equal((await report(pat)).result, 'done');
+  assert.equal((await team(blue)).score, 40);
+
+  // The task has no points: the lead reports it and an admin decides.
+  assert.equal((await report(pat)).result, 'reported');
+  await rejects(report(pat), 'patrol_already_reported');
+  await rejects(as(pat, 'select patrol_mark($1, $2, $3)', [game, blue, 'done']), 'not_admin');
+  await as(admin, 'select patrol_mark($1, $2, $3)', [game, blue, 'reject']);
+  assert.equal((await team(blue)).reported_at, null);
+  assert.equal((await report(pat)).result, 'reported');
+  await as(admin, 'select patrol_mark($1, $2, $3)', [game, blue, 'done']);
+  let b = await team(blue);
+  assert.equal(b.score, 65);
+  assert.equal(b.current, 'last');
+  await rejects(report(pat), 'patrol_not_reportable');
+
+  await as(pat, 'select patrol_abort($1)', [game]);
+  b = await team(blue);
+  assert.equal(b.outcome.last, 'failed');
+  assert.equal(b.current, null);
+  await rejects(as(pat, 'select patrol_abort($1)', [game]), 'patrol_no_mission');
+
+  // Red has no section lead; the admin moves them on.
+  await rejects(as(enemy, 'select patrol_abort($1)', [game]), 'not_section_lead');
+  await as(admin, 'select patrol_mark($1, $2, $3)', [game, red, 'skip']);
+  await as(admin, 'select patrol_mark($1, $2, $3)', [game, red, 'failed']);
+  const r = await team(red);
+  assert.deepEqual(r.outcome, { hold: 'skipped', task: 'failed' });
+  assert.equal(r.score, 0);
+  assert.equal(r.current, 'last');
 });

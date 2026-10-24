@@ -36,7 +36,7 @@ const MESSAGES: Record<string, string> = {
   section_not_found: 'That section is not in this team.',
   section_name_taken: 'Your team already has a section with that name.',
   not_removed: 'That player is not removed.',
-  not_section_lead: 'Only the section lead or an admin can change the lead.',
+  not_section_lead: 'Only a section lead or an admin can do that.',
   not_in_section: 'That player is not in this section.',
   field_invalid: 'This field couldn’t be saved. Check its shapes and try again.',
   field_view_invalid: 'Move the map to the field before saving.',
@@ -97,13 +97,19 @@ const MESSAGES: Record<string, string> = {
   patrol_invalid: 'Check the Patrol settings and try again.',
   patrol_field_required: 'Pick the field this Patrol game is for.',
   patrol_missions_required: 'Add at least one mission (50 at most).',
-  patrol_mission_invalid: 'Each mission needs a name and 1–4 different points.',
+  patrol_mission_invalid: 'Each mission needs a name, up to 4 different points and a finish point if it uses one.',
   patrol_search_needs_start: 'In a Scan to get game, every mission must be locked to a point.',
   patrol_field_mismatch: 'This Patrol game was built for a different field. Pick that field for the day, or rebuild the game.',
   patrol_point_missing: 'A mission uses a point that’s no longer on the field. Edit the game in Hosting, Games.',
   not_patrol: 'This game isn’t a Patrol game.',
   patrol_team_out: 'Your team isn’t playing this game.',
   patrol_not_in_play: 'You’re hit. Get treated before scanning points.',
+  patrol_no_mission: 'Your team has no mission right now.',
+  patrol_not_reportable: 'This mission finishes by scanning, not by reporting.',
+  patrol_already_reported: 'Already reported. Waiting for the host to confirm.',
+  patrol_not_ready: 'Scan all of the mission’s points first.',
+  patrol_hold_running: 'Keep holding: the hold time isn’t up yet.',
+  patrol_no_report: 'There’s no report to reject.',
 };
 
 export class ApiError extends Error {
@@ -207,6 +213,10 @@ export const api = {
     rpc('bind_tag', { p_code: code, p_field: field, p_point: point }),
   lookupTag: (code: string, day: string | null) => rpc<TagLookup>('lookup_tag', { p_code: code, p_day: day }),
   patrolScan: (game: string, code: string) => rpc<PatrolScan>('patrol_scan', { p_game: game, p_code: code }),
+  patrolReport: (game: string) => rpc<{ result: 'done' | 'reported' }>('patrol_report', { p_game: game }),
+  patrolAbort: (game: string) => rpc<void>('patrol_abort', { p_game: game }),
+  patrolMark: (game: string, team: string, action: 'done' | 'failed' | 'skip' | 'reject') =>
+    rpc<void>('patrol_mark', { p_game: game, p_team: team, p_action: action }),
   // Games
   createGame: (day: string, c: GameConfig) =>
     rpc<string>('create_game', {
