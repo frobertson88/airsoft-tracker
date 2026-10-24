@@ -3,7 +3,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
-import { StyleSheet, Text, View, type ViewStyle } from 'react-native';
+import { PixelRatio, Platform, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import MapView, { Circle, Marker, Polygon, Polyline, type Region } from 'react-native-maps';
 import {
   AREA_LABELS,
@@ -93,6 +93,11 @@ export interface FieldMapProps {
 }
 
 const toLatLng = (c: Coord) => ({ latitude: c.lat, longitude: c.lng });
+// The iPhone's map picture only draws lines, not shapes, so there the outlines
+// are drawn as closed lines and the shapes keep just their fill.
+const outlinesAsLines = Platform.OS === 'ios';
+const closed = (pts: Coord[]) => [...pts, pts[0]].map(toLatLng);
+
 const toRegion = (v: FieldView): Region => ({
   latitude: v.lat,
   longitude: v.lng,
@@ -151,11 +156,13 @@ export const FieldMap = forwardRef<FieldMapHandle, FieldMapProps>(function Field
       // Give the satellite tiles a moment to load at the new view.
       await new Promise((r) => setTimeout(r, 1500));
       try {
+        // 480 pixels wide: the size is in points, which the phone multiplies by its pixel ratio.
+        const w = 480 / PixelRatio.get();
         const b64 = await m.takeSnapshot({
           // iOS needs the region spelled out: left blank it pictures the sea at 0°, 0°.
           region,
-          width: 480,
-          height: Math.round((480 * height) / width),
+          width: w,
+          height: Math.round((w * height) / width),
           format: 'jpg',
           quality: 0.6,
           result: 'base64',
@@ -208,8 +215,11 @@ export const FieldMap = forwardRef<FieldMapHandle, FieldMapProps>(function Field
           coordinates={data.boundary.map(toLatLng)}
           strokeColor={colours.accent}
           fillColor="rgba(168,197,142,0.08)"
-          strokeWidth={3}
+          strokeWidth={outlinesAsLines ? 0 : 3}
         />
+      )}
+      {outlinesAsLines && data.boundary.length >= 3 && (
+        <Polyline coordinates={closed(data.boundary)} strokeColor={colours.accent} strokeWidth={3} />
       )}
 
       {data.areas.map((a, i) => (
@@ -218,10 +228,20 @@ export const FieldMap = forwardRef<FieldMapHandle, FieldMapProps>(function Field
           coordinates={a.points.map(toLatLng)}
           strokeColor={AREA_STYLE[a.kind].stroke}
           fillColor={AREA_STYLE[a.kind].fill}
-          strokeWidth={2}
+          strokeWidth={outlinesAsLines ? 0 : 2}
           lineDashPattern={AREA_STYLE[a.kind].dash}
         />
       ))}
+      {outlinesAsLines &&
+        data.areas.map((a, i) => (
+          <Polyline
+            key={`area-line-${i}`}
+            coordinates={closed(a.points)}
+            strokeColor={AREA_STYLE[a.kind].stroke}
+            strokeWidth={2}
+            lineDashPattern={AREA_STYLE[a.kind].dash}
+          />
+        ))}
       {data.areas.map((a, i) => (
         <Marker
           key={`area-label-${i}`}
