@@ -34,7 +34,7 @@ import {
 } from '../lib/patrol';
 import { supabase } from '../lib/supabase';
 import { colours, fonts, space } from '../theme';
-import { Body, Button, Chip, ConfirmButton, ErrorText, Field, Label, List, ListAdd, ListRow, Row, useOpenRow } from './ui';
+import { Body, Button, Chip, ConfirmButton, ErrorText, Field, List, ListAdd, ListRow, Row, useOpenRow } from './ui';
 
 type FieldRow = Pick<SavedField, 'id' | 'name' | 'data'>;
 
@@ -255,8 +255,7 @@ export function MissionList({
                   .filter(Boolean)
                   .join(' · ')
               }
-              value={String(m.reward)}
-              big
+              value={`${m.reward} pts`}
               valueColour={problem ? colours.danger : undefined}
               onPress={() => onOpen(m.id)}
             />
@@ -264,14 +263,14 @@ export function MissionList({
         })}
         <ListAdd title="Add a mission" onPress={add} />
       </List>
-      <Text style={styles.help}>Points on the right. L is a mission locked to a point: scanning it hands the mission out.</Text>
+      <Text style={styles.help}>L is a mission locked to a point: scanning it hands the mission out.</Text>
       {points.length > 0 && <Button title="Add 5 random missions" variant="quiet" onPress={generate} />}
     </>
   );
 }
 
-/** One mission on its own screen: short groups of rows (the mission, where,
- * how it ends, score), every row closed until tapped, and Previous / Next. */
+/** One mission on its own screen, as in the agreed mock (option A): one list of
+ * rows, each closed until tapped, then Previous / Next, Duplicate and Delete. */
 export function MissionEditor({
   value,
   onChange,
@@ -310,13 +309,13 @@ export function MissionEditor({
 
   return (
     <>
-      <Label>
-        Mission {index + 1} of {p.missions.length}
-      </Label>
+      <Text style={styles.help}>
+        Mission {index + 1} of {p.missions.length}. Tap a row to set it.
+      </Text>
       <List>
         <ListRow
-          title={m.name || 'Name this mission'}
-          detail={m.brief || 'Add a briefing for the team'}
+          title="Name and brief"
+          detail={m.brief || (m.name.trim() ? m.name : 'Name this mission')}
           valueColour={!m.name.trim() ? colours.danger : undefined}
           open={rows.isOpen('name')}
           onPress={() => rows.toggle('name')}
@@ -351,31 +350,6 @@ export function MissionEditor({
           </Row>
           <Text style={styles.help}>{pick.help} A type fills in the rules below; you can still change any of them.</Text>
         </ListRow>
-        <ListRow
-          title="Teams"
-          value={m.teams.length ? m.teams.map((n) => TEAM_NAMES[n - 1]).join(', ') : 'Every team'}
-          open={rows.isOpen('teams')}
-          onPress={() => rows.toggle('teams')}
-        >
-          <Row style={styles.wrap}>
-            <Chip label="Every team" selected={m.teams.length === 0} onPress={() => edit({ teams: [] })} />
-            {TEAM_NAMES.slice(0, teamCount).map((name, i) => (
-              <Chip
-                key={name}
-                label={`Team ${i + 1} (${name})`}
-                selected={m.teams.includes(i + 1)}
-                onPress={() =>
-                  edit({ teams: m.teams.includes(i + 1) ? m.teams.filter((n) => n !== i + 1) : [...m.teams, i + 1].sort() })
-                }
-              />
-            ))}
-          </Row>
-        </ListRow>
-
-      </List>
-
-      <Label>Where</Label>
-      <List>
         <ListRow
           title={m.type === 'courier' ? 'Pick-up point' : 'Points to scan'}
           detail={reports && !m.steps.length ? 'None: nothing to scan' : m.in_order ? 'In this order' : 'Any order'}
@@ -423,10 +397,6 @@ export function MissionEditor({
           </Text>
         </ListRow>
 
-      </List>
-
-      <Label>How it ends</Label>
-      <List>
         <ListRow
           title="Done when"
           value={m.done === 'finish' ? (m.finish ? `Scan ${pointTitle(data, m.finish)}` : 'Pick a point') : DONE_LABEL[m.done]}
@@ -479,12 +449,23 @@ export function MissionEditor({
 
         <ListRow
           title="Fails when"
-          detail="Or failed by hand by the lead or host"
-          value={m.minutes ? `${m.minutes} min` : 'Only by hand'}
+          value={m.minutes ? 'Time runs out' : 'Only by hand'}
           open={rows.isOpen('fails')}
           onPress={() => rows.toggle('fails')}
         >
-          <Text style={styles.sub}>Time limit</Text>
+          <Row style={styles.wrap}>
+            <Chip label="Time runs out" selected={!!m.minutes} onPress={() => edit({ minutes: m.minutes ?? 15 })} />
+            <Chip label="Only by hand" selected={!m.minutes} onPress={() => edit({ minutes: null })} />
+          </Row>
+          <Text style={styles.help}>The section lead and the host can always fail it by hand. Then the next mission starts.</Text>
+        </ListRow>
+
+        <ListRow
+          title="Time limit"
+          value={m.minutes ? `${m.minutes} min` : 'None'}
+          open={rows.isOpen('time')}
+          onPress={() => rows.toggle('time')}
+        >
           <Row style={styles.wrap}>
             {MISSION_MINUTES.map((n) => (
               <Chip key={n ?? 'none'} label={n ? `${n} min` : 'None'} selected={m.minutes === n} onPress={() => edit({ minutes: n })} />
@@ -492,10 +473,6 @@ export function MissionEditor({
           </Row>
         </ListRow>
 
-      </List>
-
-      <Label>Score and card</Label>
-      <List>
         <ListRow title="Reward" value={String(m.reward)} big open={rows.isOpen('reward')} onPress={() => rows.toggle('reward')}>
           <Row style={styles.wrap}>
             {REWARDS.map((n) => (
@@ -503,6 +480,27 @@ export function MissionEditor({
             ))}
           </Row>
           <Text style={styles.help}>Paid once, when the mission is done. A failed or skipped mission pays nothing.</Text>
+        </ListRow>
+
+        <ListRow
+          title="Teams"
+          value={m.teams.length ? m.teams.map((n) => TEAM_NAMES[n - 1]).join(', ') : 'Every team'}
+          open={rows.isOpen('teams')}
+          onPress={() => rows.toggle('teams')}
+        >
+          <Row style={styles.wrap}>
+            <Chip label="Every team" selected={m.teams.length === 0} onPress={() => edit({ teams: [] })} />
+            {TEAM_NAMES.slice(0, teamCount).map((name, i) => (
+              <Chip
+                key={name}
+                label={`Team ${i + 1} (${name})`}
+                selected={m.teams.includes(i + 1)}
+                onPress={() =>
+                  edit({ teams: m.teams.includes(i + 1) ? m.teams.filter((n) => n !== i + 1) : [...m.teams, i + 1].sort() })
+                }
+              />
+            ))}
+          </Row>
         </ListRow>
 
         <ListRow
