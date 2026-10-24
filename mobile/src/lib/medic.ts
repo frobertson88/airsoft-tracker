@@ -20,12 +20,22 @@ export interface Wound {
   name: string;
   instruction: string;
   helpers: Helper[];
+  /** Random wounds only: weighed against the other wounds (1–100). */
+  chance?: number;
+  /** Random wounds only: dead at once; bringing back follows the Dead hit. */
+  fatal?: boolean;
 }
 
-/** Three hits (the last is death) and what happens when bleed-out reaches zero. */
+/**
+ * 2–6 hits in order (the last is death) and what happens when bleed-out reaches zero.
+ * A random set (0011_random_wounds.sql) also has a wound list: each hit before
+ * dead_on picks one by chance.
+ */
 export interface MedicRules {
   hits: Wound[];
   expiry: 'dead' | 'wait';
+  wounds?: Wound[];
+  dead_on?: number;
 }
 
 export interface MedicRuleset {
@@ -48,8 +58,17 @@ export const EXPIRY_LABEL: Record<MedicRules['expiry'], string> = {
   wait: 'Wait for help at bleed-out',
 };
 
-export const HIT_TABS = ['1st hit', '2nd hit', 'Dead'];
 export const BLEED_CHOICES = [5, 10, 15, 20, 30];
+export const DEAD_ON_CHOICES = [2, 3, 4, 5];
+export const ORDINAL = ['', '1st', '2nd', '3rd', '4th', '5th', '6th'];
+
+export const isRandom = (r: MedicRules) => !!r.wounds?.length;
+
+/** Each random wound's chance as a whole percentage. */
+export function chancePercents(wounds: Wound[]) {
+  const total = wounds.reduce((n, w) => n + (w.chance ?? 0), 0);
+  return wounds.map((w) => (total ? Math.round(((w.chance ?? 0) * 100) / total) : 0));
+}
 
 export function helperText(helpers: Helper[] | undefined) {
   const names = HELPERS.filter((h) => helpers?.includes(h.helper)).map((h) => h.label);
@@ -58,12 +77,18 @@ export function helperText(helpers: Helper[] | undefined) {
   return `${names.slice(0, -1).join(', ')} or ${names[names.length - 1].toLowerCase()}`;
 }
 
-export const rulesSummary = (r: MedicRules) => r.hits.map((h) => h.name).join(' · ');
+export function rulesSummary(r: MedicRules) {
+  if (!r.wounds?.length) return r.hits.map((h) => h.name).join(' · ');
+  const pc = chancePercents(r.wounds);
+  const wounds = r.wounds.map((w, i) => `${w.name} ${pc[i]}%`).join(' · ');
+  return `Random: ${wounds} · Dead on ${ORDINAL[r.dead_on ?? 3]} hit`;
+}
 
 export const settingsFor = (set: MedicRuleset, bleed_minutes = 10): MedicSettings => ({
   name: set.name,
   hits: set.rules.hits,
   expiry: set.rules.expiry,
+  ...(set.rules.wounds?.length ? { wounds: set.rules.wounds, dead_on: set.rules.dead_on } : {}),
   bleed_minutes,
 });
 
@@ -111,6 +136,8 @@ export interface MedicStatusRow {
   life: number;
   bleed_until: number | string | null;
   expired: boolean;
+  /** The revealed random wound's name (random sets only). */
+  shown_wound?: string | null;
 }
 
 /** Your own status, with the code your helper scans. */
@@ -121,6 +148,8 @@ export interface MyMedic {
   bleed_until: number | string | null;
   expired: boolean;
   code: string | null;
+  /** Your random wound, once a scan has revealed it. */
+  wound?: Wound | null;
 }
 
 export interface ScanResult {
@@ -144,11 +173,22 @@ export function bleedLeft(game: Game, bleedUntil: number | string | null | undef
 }
 
 /** The status label: In play, Awaiting medic, or the last revealed wound. */
-export function statusLabel(s: Pick<MyMedic, 'status' | 'shown_hit'>, medic: MedicSettings | null) {
+export function statusLabel(
+  s: Pick<MyMedic, 'status' | 'shown_hit'> & { shown_wound?: string | null; wound?: Wound | null },
+  medic: MedicSettings | null,
+) {
   if (s.status === 'in_play') return 'In play';
   if (s.status === 'awaiting') return 'Awaiting medic';
   if (s.status === 'dead') return 'Dead';
-  return medic?.hits[(s.shown_hit ?? 1) - 1]?.name ?? 'Wounded';
+  return s.wound?.name ?? s.shown_wound ?? medic?.hits[(s.shown_hit ?? 1) - 1]?.name ?? 'Wounded';
+}
+
+/** The revealed wound you're shown on the Hit view (null while hidden). */
+export function myWound(mine: MyMedic, medic: MedicSettings) {
+  const dead = medic.hits[medic.hits.length - 1];
+  if (mine.status === 'dead') return mine.wound?.fatal ? mine.wound : dead;
+  if (mine.status !== 'wounded') return null;
+  return mine.wound ?? (mine.shown_hit ? medic.hits[mine.shown_hit - 1] : null);
 }
 
 const QR_PREFIX = 'airsoft-medic';

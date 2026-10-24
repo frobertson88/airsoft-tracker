@@ -3,9 +3,11 @@ import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { MemberRow } from '../../../components/MemberList';
 import { GameClock } from '../../../components/GameClock';
+import { PatrolCard } from '../../../components/PatrolPlay';
 import { Body, Button, Card, Display, Label, Screen } from '../../../components/ui';
 import { useDay } from '../../../lib/day';
-import { EXPIRY_LABEL, helperText, medicOf } from '../../../lib/medic';
+import { clockFor, useServerNow } from '../../../lib/game';
+import { chancePercents, EXPIRY_LABEL, helperText, medicOf, ORDINAL } from '../../../lib/medic';
 import { colours, space, teamColour, fonts } from '../../../theme';
 
 // The team each player last acknowledged, per day, so a shuffle shows once.
@@ -14,6 +16,7 @@ const seenTeam = new Map<string, string | null>();
 export default function GameTab() {
   const { id, data, me, teamById, sectionById } = useDay();
   const [, refresh] = useState(0);
+  const now = useServerNow(1000);
   if (!data || !me) return null;
 
   // Picking a team yourself after having none isn't news.
@@ -60,7 +63,10 @@ export default function GameTab() {
       )}
 
       {data.game ? (
-        <GameClock game={data.game} />
+        <>
+          <GameClock game={data.game} />
+          {data.game.mode === 'patrol' && <PatrolCard game={data.game} clock={clockFor(data.game, now)} />}
+        </>
       ) : (
         <Card style={{ padding: space.lg, gap: space.md }}>
           <Text style={styles.kicker}>Next up</Text>
@@ -76,15 +82,36 @@ export default function GameTab() {
         <>
           <Label>Medic rules · {medic.name}</Label>
           <Card>
-            {medic.hits.map((h, i) => (
-              <View key={i} style={{ gap: 2 }}>
-                <Text style={styles.wound}>{h.name}</Text>
-                {!!h.instruction && <Text style={styles.role}>{h.instruction}</Text>}
-                <Text style={styles.role}>
-                  {i === medic.hits.length - 1 ? 'Brought back by' : 'Treated by'} {helperText(h.helpers).toLowerCase()}
-                </Text>
-              </View>
-            ))}
+            {medic.wounds?.length ? (
+              <>
+                <Text style={styles.role}>Each hit is a random wound:</Text>
+                {medic.wounds.map((w, i) => (
+                  <View key={i} style={{ gap: 2 }}>
+                    <Text style={styles.wound}>
+                      {w.name} · {chancePercents(medic.wounds!)[i]}%
+                    </Text>
+                    {!!w.instruction && <Text style={styles.role}>{w.instruction}</Text>}
+                    <Text style={styles.role}>
+                      {w.fatal ? 'Dead at once' : `Treated by ${helperText(w.helpers).toLowerCase()}`}
+                    </Text>
+                  </View>
+                ))}
+              </>
+            ) : null}
+            {medic.hits.map((h, i) =>
+              medic.wounds?.length && i < medic.hits.length - 1 ? null : (
+                <View key={i} style={{ gap: 2 }}>
+                  <Text style={styles.wound}>
+                    {h.name}
+                    {medic.wounds?.length ? ` · ${ORDINAL[medic.dead_on ?? 3]} hit` : ''}
+                  </Text>
+                  {!!h.instruction && <Text style={styles.role}>{h.instruction}</Text>}
+                  <Text style={styles.role}>
+                    {i === medic.hits.length - 1 ? 'Brought back by' : 'Treated by'} {helperText(h.helpers).toLowerCase()}
+                  </Text>
+                </View>
+              ),
+            )}
             <Text style={styles.role}>
               Bleed-out {medic.bleed_minutes} min · {EXPIRY_LABEL[medic.expiry].toLowerCase()}. Tap I’m hit on the Map
               when you’re hit.

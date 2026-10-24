@@ -25,6 +25,9 @@ export interface FieldArea {
 export interface FieldPoint extends Coord {
   kind: PointKind;
   label: string;
+  /** Permanent id and short number, stamped by the server when the field is saved. */
+  id?: string;
+  num?: number;
 }
 
 export interface FieldData {
@@ -59,6 +62,9 @@ export interface DayField {
   data: FieldData;
   selected_at: string;
 }
+
+/** "3 · Hilltop bunker", or just the label for a point not saved yet. */
+export const pointName = (p: FieldPoint) => (p.num ? `${p.num} · ${p.label}` : p.label);
 
 export const AREA_LABELS: Record<AreaKind, string> = { nogo: 'No-go', danger: 'Danger' };
 

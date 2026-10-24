@@ -3,18 +3,20 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
-import { StyleSheet, Text, View, type ViewStyle } from 'react-native';
+import { PixelRatio, Platform, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import MapView, { Circle, Marker, Polygon, Polyline, type Region } from 'react-native-maps';
 import {
   AREA_LABELS,
   centroid,
   POINT_KINDS,
+  pointName,
   viewFor,
   type AreaKind,
   type Coord,
   type FieldData,
   type FieldView,
 } from '../lib/field';
+import { gridLabel, gridLines } from '../lib/grid';
 import { bearing, offset, type MapObjectKind } from '../lib/mapTools';
 import { colours, fonts, space } from '../theme';
 
@@ -83,16 +85,26 @@ export interface FieldMapProps {
   onDrawingPress?: (id: string) => void;
   onDrawingMove?: (id: string, points: Coord[]) => void;
   toolDraft?: ToolDraft | null;
+  /** The field editor: tap a point to pick it, then hold and drag it to move. */
+  selectedPoint?: number | null;
+  onPointPress?: (index: number) => void;
+  onPointMove?: (index: number, c: Coord) => void;
   /** Taps register straight away (double-tap zoom is off while a tool is in use). */
   quickTaps?: boolean;
   onPress?: (c: Coord) => void;
   onLongPress?: (c: Coord) => void;
   onViewChange?: (v: FieldView) => void;
   showsUserLocation?: boolean;
+  /** The 100 m map grid, numbered along the bottom and left (lib/grid.ts). */
+  grid?: boolean;
   style?: ViewStyle;
 }
 
 const toLatLng = (c: Coord) => ({ latitude: c.lat, longitude: c.lng });
+// The iPhone's map picture only draws lines, not shapes, so while it's taken
+// the outlines are traced again as closed lines.
+const closed = (pts: Coord[]) => [...pts, pts[0]].map(toLatLng);
+
 const toRegion = (v: FieldView): Region => ({
   latitude: v.lat,
   longitude: v.lng,
@@ -122,11 +134,15 @@ export const FieldMap = forwardRef<FieldMapHandle, FieldMapProps>(function Field
     onDrawingPress,
     onDrawingMove,
     toolDraft,
+    selectedPoint,
+    onPointPress,
+    onPointMove,
     quickTaps,
     onPress,
     onLongPress,
     onViewChange,
     showsUserLocation,
+    grid,
     style,
   },
   ref,
@@ -135,6 +151,8 @@ export const FieldMap = forwardRef<FieldMapHandle, FieldMapProps>(function Field
   // Tapping a drawing can also reach the map's own onPress; ignore that echo.
   const lastDrawingPress = useRef(0);
   const size = useRef({ width: 0, height: 0 });
+  const [picturing, setPicturing] = useState(false);
+  const outlinesAsLines = picturing && Platform.OS === 'ios';
   const fieldRegion = () => {
     const all = data.boundary.length ? data.boundary : data.points;
     return toRegion(all.length ? viewFor(all, data.view) : data.view);
@@ -146,13 +164,19 @@ export const FieldMap = forwardRef<FieldMapHandle, FieldMapProps>(function Field
       const m = map.current;
       const { width, height } = size.current;
       if (!m || !width || !height) return null;
-      m.animateToRegion(fieldRegion(), 0);
+      const region = fieldRegion();
+      m.animateToRegion(region, 0);
+      setPicturing(true);
       // Give the satellite tiles a moment to load at the new view.
       await new Promise((r) => setTimeout(r, 1500));
       try {
+        // 480 pixels wide: the size is in points, which the phone multiplies by its pixel ratio.
+        const w = 480 / PixelRatio.get();
         const b64 = await m.takeSnapshot({
-          width: 480,
-          height: Math.round((480 * height) / width),
+          // iOS needs the region spelled out: left blank it pictures the sea at 0°, 0°.
+          region,
+          width: w,
+          height: Math.round((w * height) / width),
           format: 'jpg',
           quality: 0.6,
           result: 'base64',
@@ -160,6 +184,8 @@ export const FieldMap = forwardRef<FieldMapHandle, FieldMapProps>(function Field
         return `data:image/jpeg;base64,${b64}`;
       } catch {
         return null;
+      } finally {
+        setPicturing(false);
       }
     },
   }));
@@ -183,6 +209,13 @@ export const FieldMap = forwardRef<FieldMapHandle, FieldMapProps>(function Field
         onPress
           ? (e) => {
               const action = (e.nativeEvent as { action?: string }).action;
+              // A tap on a field point also arrives here; pick it, in case the marker's own press didn't fire.
+              if (action === 'marker-press' && onPointPress) {
+                const { latitude, longitude } = e.nativeEvent.coordinate;
+                const i = data.points.findIndex((p) => Math.abs(p.lat - latitude) < 1e-7 && Math.abs(p.lng - longitude) < 1e-7);
+                if (i >= 0) onPointPress(i);
+                return;
+              }
               if (action === 'marker-press' || action === 'polyline-press' || action === 'polygon-press') return;
               if (Date.now() - lastDrawingPress.current < 400) return;
               onPress({ lat: e.nativeEvent.coordinate.latitude, lng: e.nativeEvent.coordinate.longitude });
@@ -208,6 +241,11 @@ export const FieldMap = forwardRef<FieldMapHandle, FieldMapProps>(function Field
           strokeWidth={3}
         />
       )}
+      {outlinesAsLines && data.boundary.length >= 3 && (
+        <Polyline coordinates={closed(data.boundary)} strokeColor={colours.accent} strokeWidth={3} />
+      )}
+
+      {grid && <GridOverlay data={data} />}
 
       {data.areas.map((a, i) => (
         <Polygon
@@ -219,6 +257,16 @@ export const FieldMap = forwardRef<FieldMapHandle, FieldMapProps>(function Field
           lineDashPattern={AREA_STYLE[a.kind].dash}
         />
       ))}
+      {outlinesAsLines &&
+        data.areas.map((a, i) => (
+          <Polyline
+            key={`area-line-${i}`}
+            coordinates={closed(a.points)}
+            strokeColor={AREA_STYLE[a.kind].stroke}
+            strokeWidth={2}
+            lineDashPattern={AREA_STYLE[a.kind].dash}
+          />
+        ))}
       {data.areas.map((a, i) => (
         <Marker
           key={`area-label-${i}`}
@@ -237,14 +285,35 @@ export const FieldMap = forwardRef<FieldMapHandle, FieldMapProps>(function Field
 
       {data.points.map((p, i) => {
         const kind = POINT_KINDS.find((k) => k.kind === p.kind) ?? POINT_KINDS[4];
+        const selected = i === selectedPoint;
         return (
-          <Marker key={`point-${i}`} coordinate={toLatLng(p)} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={false}>
+          <Marker
+            // The key changes with the look so the marker redraws.
+            key={`point-${i}-${p.kind}-${p.num}-${p.label}-${selected}`}
+            coordinate={toLatLng(p)}
+            anchor={{ x: 0.5, y: 0.5 }}
+            tracksViewChanges={false}
+            draggable={!!onPointMove}
+            onDragEnd={
+              onPointMove
+                ? (e) => onPointMove(i, { lat: e.nativeEvent.coordinate.latitude, lng: e.nativeEvent.coordinate.longitude })
+                : undefined
+            }
+            onPress={
+              onPointPress
+                ? () => {
+                    lastDrawingPress.current = Date.now();
+                    onPointPress(i);
+                  }
+                : undefined
+            }
+          >
             <View style={styles.point}>
-              <View style={styles.pointIcon}>
+              <View style={[styles.pointIcon, selected && styles.markerSelected]}>
                 <Ionicons name={kind.icon as never} size={14} color={colours.onAccent} />
               </View>
               <Text style={styles.pointLabel} numberOfLines={1}>
-                {p.label}
+                {pointName(p)}
               </Text>
             </View>
           </Marker>
@@ -541,7 +610,59 @@ function Drawing({
   );
 }
 
+// The map grid: thin lines every 100 m, square numbers just outside the
+// bottom (eastings) and left (northings) edges.
+function GridOverlay({ data }: { data: FieldData }) {
+  const { eastings, northings } = gridLines(data);
+  if (!eastings.length || !northings.length) return null;
+  const bottom = eastings[0].points[0].lat;
+  const left = northings[0].points[0].lng;
+  const line = 'rgba(232,236,228,0.45)';
+  // Labels sit in the middle of each square.
+  const halfLng = eastings.length > 1 ? (eastings[1].points[0].lng - left) / 2 : 0;
+  const halfLat = northings.length > 1 ? (northings[1].points[0].lat - bottom) / 2 : 0;
+  return (
+    <>
+      {eastings.map((l) => (
+        <Polyline key={`ge-${l.n}`} coordinates={l.points.map(toLatLng)} strokeColor={line} strokeWidth={1} zIndex={1} />
+      ))}
+      {northings.map((l) => (
+        <Polyline key={`gn-${l.n}`} coordinates={l.points.map(toLatLng)} strokeColor={line} strokeWidth={1} zIndex={1} />
+      ))}
+      {eastings.slice(0, -1).map((l) => (
+        <Marker
+          key={`gel-${l.n}`}
+          coordinate={{ latitude: bottom, longitude: l.points[0].lng + halfLng }}
+          anchor={{ x: 0.5, y: 0 }}
+          tracksViewChanges={false}
+        >
+          <Text style={styles.gridLabel}>{gridLabel(l.n)}</Text>
+        </Marker>
+      ))}
+      {northings.slice(0, -1).map((l) => (
+        <Marker
+          key={`gnl-${l.n}`}
+          coordinate={{ latitude: l.points[0].lat + halfLat, longitude: left }}
+          anchor={{ x: 1, y: 0.5 }}
+          tracksViewChanges={false}
+        >
+          <Text style={styles.gridLabel}>{gridLabel(l.n)}</Text>
+        </Marker>
+      ))}
+    </>
+  );
+}
+
 const styles = StyleSheet.create({
+  gridLabel: {
+    color: colours.text,
+    fontFamily: fonts.semibold,
+    fontSize: 11,
+    paddingHorizontal: 3,
+    fontVariant: ['tabular-nums'],
+    textShadowColor: 'rgba(0,0,0,0.9)',
+    textShadowRadius: 3,
+  },
   map: { flex: 1 },
   areaLabel: {
     backgroundColor: 'rgba(11,16,12,0.85)',
