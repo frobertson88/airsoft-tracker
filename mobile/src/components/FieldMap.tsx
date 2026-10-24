@@ -83,6 +83,10 @@ export interface FieldMapProps {
   onDrawingPress?: (id: string) => void;
   onDrawingMove?: (id: string, points: Coord[]) => void;
   toolDraft?: ToolDraft | null;
+  /** The field editor: tap a point to pick it, then hold and drag it to move. */
+  selectedPoint?: number | null;
+  onPointPress?: (index: number) => void;
+  onPointMove?: (index: number, c: Coord) => void;
   /** Taps register straight away (double-tap zoom is off while a tool is in use). */
   quickTaps?: boolean;
   onPress?: (c: Coord) => void;
@@ -126,6 +130,9 @@ export const FieldMap = forwardRef<FieldMapHandle, FieldMapProps>(function Field
     onDrawingPress,
     onDrawingMove,
     toolDraft,
+    selectedPoint,
+    onPointPress,
+    onPointMove,
     quickTaps,
     onPress,
     onLongPress,
@@ -264,10 +271,31 @@ export const FieldMap = forwardRef<FieldMapHandle, FieldMapProps>(function Field
 
       {data.points.map((p, i) => {
         const kind = POINT_KINDS.find((k) => k.kind === p.kind) ?? POINT_KINDS[4];
+        const selected = i === selectedPoint;
         return (
-          <Marker key={`point-${i}`} coordinate={toLatLng(p)} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={false}>
+          <Marker
+            // The key changes with the look so the marker redraws.
+            key={`point-${i}-${p.kind}-${p.label}-${selected}`}
+            coordinate={toLatLng(p)}
+            anchor={{ x: 0.5, y: 0.5 }}
+            tracksViewChanges={false}
+            draggable={!!onPointMove}
+            onDragEnd={
+              onPointMove
+                ? (e) => onPointMove(i, { lat: e.nativeEvent.coordinate.latitude, lng: e.nativeEvent.coordinate.longitude })
+                : undefined
+            }
+            onPress={
+              onPointPress
+                ? () => {
+                    lastDrawingPress.current = Date.now();
+                    onPointPress(i);
+                  }
+                : undefined
+            }
+          >
             <View style={styles.point}>
-              <View style={styles.pointIcon}>
+              <View style={[styles.pointIcon, selected && styles.markerSelected]}>
                 <Ionicons name={kind.icon as never} size={14} color={colours.onAccent} />
               </View>
               <Text style={styles.pointLabel} numberOfLines={1}>

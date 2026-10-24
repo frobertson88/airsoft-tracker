@@ -61,6 +61,8 @@ export default function FieldEditor() {
   const [areaNote, setAreaNote] = useState('');
   // How many points this run of the point tool added, so Undo only takes those back.
   const [pointsAdded, setPointsAdded] = useState(0);
+  // A point tapped on the map, to rename, change, move or delete.
+  const [selectedPoint, setSelectedPoint] = useState<number | null>(null);
   const [pointLabel, setPointLabel] = useState('');
   const [pointKind, setPointKind] = useState<PointKind>('staging');
 
@@ -106,6 +108,7 @@ export default function FieldEditor() {
     setTool(t);
     setDraft([]);
     setPendingArea(null);
+    setSelectedPoint(null);
     setPointsAdded(0);
     setPointLabel('');
     setError('');
@@ -118,6 +121,10 @@ export default function FieldEditor() {
   };
 
   const onMapPress = (c: Coord) => {
+    if (selectedPoint !== null) {
+      setSelectedPoint(null);
+      return;
+    }
     if (!tool || pendingArea) return;
     if (tool === 'point') {
       addPoint(c);
@@ -162,6 +169,15 @@ export default function FieldEditor() {
     setPointLabel('');
   };
 
+  const changePoint = (i: number, change: Partial<FieldPoint>) =>
+    setData((d) => ({ ...d, points: d.points.map((p, j) => (j === i ? { ...p, ...change } : p)) }));
+
+  const onPointPress = (i: number) => {
+    // Not while drawing a shape or naming an area.
+    if ((tool && tool !== 'point') || pendingArea) return;
+    setSelectedPoint(i === selectedPoint ? null : i);
+  };
+
   const undoPoint = () => {
     setData((d) => ({ ...d, points: d.points.slice(0, -1) }));
     setPointsAdded((n) => n - 1);
@@ -198,6 +214,11 @@ export default function FieldEditor() {
       // The map opens on whatever view you leave it on when you save.
       const fieldId = await api.saveField(isNew ? null : id, name.trim(), location.trim(), notes.trim(), {
         ...data,
+        // A label cleared while editing falls back to the point's kind.
+        points: data.points.map((p) => ({
+          ...p,
+          label: p.label.trim() || (POINT_KINDS.find((k) => k.kind === p.kind)?.label ?? 'Point'),
+        })),
         view: view.current,
       });
       // A picture for the field lists. The field is already saved, so a failure here doesn't matter.
@@ -228,6 +249,9 @@ export default function FieldEditor() {
             view.current = v;
           }}
           showsUserLocation={Platform.OS !== 'web'}
+          selectedPoint={selectedPoint}
+          onPointPress={onPointPress}
+          onPointMove={(i, c) => changePoint(i, { lat: c.lat, lng: c.lng })}
         />
         <Pressable onPress={goToMe} accessibilityRole="button" accessibilityLabel="Go to my location" style={styles.fab}>
           <Ionicons name="locate" size={22} color={colours.text} />
@@ -268,6 +292,44 @@ export default function FieldEditor() {
               <Button title="Discard" variant="secondary" onPress={() => { setPendingArea(null); setTool(null); }} />
             </Row>
           </Card>
+        ) : selectedPoint !== null && data.points[selectedPoint] ? (
+          <Card>
+            <Label>Point</Label>
+            <Row>
+              {POINT_KINDS.map((k) => (
+                <Chip
+                  key={k.kind}
+                  label={k.label}
+                  selected={data.points[selectedPoint].kind === k.kind}
+                  onPress={() => {
+                    const p = data.points[selectedPoint];
+                    const old = POINT_KINDS.find((x) => x.kind === p.kind)?.label;
+                    // A label that was just the old kind's name follows the new kind.
+                    changePoint(selectedPoint, { kind: k.kind, ...(p.label === old ? { label: k.label } : {}) });
+                  }}
+                />
+              ))}
+            </Row>
+            <Field
+              value={data.points[selectedPoint].label}
+              onChangeText={(t) => changePoint(selectedPoint, { label: t })}
+              placeholder="Label"
+              maxLength={40}
+            />
+            <Body muted>Hold and drag it to move.</Body>
+            <Row>
+              <Button title="Done" onPress={() => setSelectedPoint(null)} />
+              <Button
+                title="Delete"
+                variant="secondary"
+                onPress={() => {
+                  setData((d) => ({ ...d, points: d.points.filter((_, j) => j !== selectedPoint) }));
+                  setSelectedPoint(null);
+                  setPointsAdded(0);
+                }}
+              />
+            </Row>
+          </Card>
         ) : tool === 'point' ? (
           <Card>
             <Label>Points · {pointsAdded} added</Label>
@@ -303,7 +365,7 @@ export default function FieldEditor() {
 
         <ErrorText>{error}</ErrorText>
 
-        {!tool && !pendingArea && (
+        {!tool && !pendingArea && selectedPoint === null && (
           <>
             <Label>Find the field</Label>
             <Row style={{ flexWrap: 'nowrap' }}>
