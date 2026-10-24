@@ -19,7 +19,7 @@ import { BLEED_CHOICES, helperText, isRandom, rulesSummary, settingsFor, useMedi
 import { supabase } from '../lib/supabase';
 import { colours, fonts, space } from '../theme';
 import { GameClock } from './GameClock';
-import { Body, Button, Card, Chip, ConfirmButton, ErrorText, Field, Label, Row } from './ui';
+import { Body, Button, Chip, ConfirmButton, ErrorText, Field, Label, List, ListRow, Row, useOpenRow } from './ui';
 
 const LENGTHS: { label: string; seconds: number | null }[] = [
   { label: '10 min', seconds: 600 },
@@ -98,6 +98,8 @@ function GameSetup({ game, onDone }: { game: Game | null; onDone?: () => void })
     game ? configOf(game) : { ...DEFAULT_CONFIG },
   );
   const [teamCount, setTeamCount] = useState<number>(game?.settings.team_count ?? currentTeams);
+  // One setting open at a time (docs/design-direction.md, List rows).
+  const rows = useOpenRow<string>();
   // Changing the number of teams shuffles by default (Fraser, 12 October 2026).
   const [fill, setFill] = useState<TeamFill | null>(null);
   const fillChoice: TeamFill = fill ?? (teamCount === currentTeams ? 'keep' : 'shuffle');
@@ -159,167 +161,222 @@ function GameSetup({ game, onDone }: { game: Game | null; onDone?: () => void })
   };
 
   return (
-    <Card style={{ gap: space.md }}>
-      {saved.setups.length > 0 && (
-        <>
-          <Text style={styles.small}>Your setups</Text>
+    <View style={{ gap: space.md }}>
+      <Field value={c.name} onChangeText={(name) => set({ name })} placeholder="Game name" maxLength={40} />
+
+      <List>
+        {saved.setups.length > 0 && (
+          <ListRow
+            title="Your setups"
+            value={saved.setups.find((x) => x.id === setupId)?.name ?? 'None'}
+            open={rows.isOpen('setups')}
+            onPress={() => rows.toggle('setups')}
+          >
+            <Row style={styles.wrap}>
+              {saved.setups.map((x) => (
+                <Chip
+                  key={x.id}
+                  label={x.name}
+                  selected={setupId === x.id}
+                  onPress={() => {
+                    setSetupId(x.id);
+                    set(configOf(x));
+                    setTeamCount(x.settings.team_count ?? 2);
+                    setFill(null);
+                  }}
+                />
+              ))}
+            </Row>
+          </ListRow>
+        )}
+
+        <ListRow
+          title="Game type"
+          value={MODE_LABEL[c.mode]}
+          open={rows.isOpen('mode')}
+          onPress={() => rows.toggle('mode')}
+        >
           <Row style={styles.wrap}>
-            {saved.setups.map((x) => (
+            {(['free', 'koth'] as GameMode[]).map((m) => (
               <Chip
-                key={x.id}
-                label={x.name}
-                selected={setupId === x.id}
+                key={m}
+                label={MODE_LABEL[m]}
+                selected={c.mode === m}
+                onPress={() =>
+                  set({ mode: m, settings: { ...(m === 'koth' ? KOTH_DEFAULTS : {}), medic: c.settings.medic } })
+                }
+              />
+            ))}
+          </Row>
+          {c.mode === 'koth' && (
+            <Text style={styles.help}>
+              A hill appears at a random spot on the field. The team with the most players inside holds it and scores
+              points. Equal numbers mean contested and nobody scores.
+            </Text>
+          )}
+        </ListRow>
+
+        <ListRow
+          title="Teams"
+          value={`${teamCount} teams`}
+          open={rows.isOpen('teams')}
+          onPress={() => rows.toggle('teams')}
+        >
+          <Row style={styles.wrap}>
+            {[2, 3, 4].map((n) => (
+              <Chip
+                key={n}
+                label={`${n} teams`}
+                selected={teamCount === n}
                 onPress={() => {
-                  setSetupId(x.id);
-                  set(configOf(x));
-                  setTeamCount(x.settings.team_count ?? 2);
+                  setTeamCount(n);
                   setFill(null);
                 }}
               />
             ))}
           </Row>
-        </>
-      )}
+        </ListRow>
 
-      <Field value={c.name} onChangeText={(name) => set({ name })} placeholder="Game name" maxLength={40} />
-
-      <Text style={styles.small}>Game type</Text>
-      <Row style={styles.wrap}>
-        {(['free', 'koth'] as GameMode[]).map((m) => (
-          <Chip
-            key={m}
-            label={MODE_LABEL[m]}
-            selected={c.mode === m}
-            onPress={() =>
-              set({ mode: m, settings: { ...(m === 'koth' ? KOTH_DEFAULTS : {}), medic: c.settings.medic } })
-            }
-          />
-        ))}
-      </Row>
-      {c.mode === 'koth' && (
-        <Text style={styles.help}>
-          A hill appears at a random spot on the field. The team with the most players inside holds it and scores
-          points. Equal numbers mean contested and nobody scores.
-        </Text>
-      )}
-
-      <Text style={styles.small}>Teams</Text>
-      <Row style={styles.wrap}>
-        {[2, 3, 4].map((n) => (
-          <Chip
-            key={n}
-            label={`${n} teams`}
-            selected={teamCount === n}
-            onPress={() => {
-              setTeamCount(n);
-              setFill(null);
-            }}
-          />
-        ))}
-      </Row>
-
-      <Text style={styles.small}>Players on teams</Text>
-      <Row style={styles.wrap}>
-        {FILLS.map((f) => (
-          <Chip
-            key={f.fill}
-            label={f.label}
-            selected={fillChoice === f.fill}
-            onPress={() => setFill(f.fill)}
-          />
-        ))}
-      </Row>
-      <Text style={styles.help}>{FILLS.find((f) => f.fill === fillChoice)?.help}</Text>
-
-      <Text style={styles.small}>Length</Text>
-      <Row style={styles.wrap}>
-        {LENGTHS.map((l) => (
-          <Chip key={l.label} label={l.label} selected={c.length_seconds === l.seconds} onPress={() => set({ length_seconds: l.seconds })} />
-        ))}
-      </Row>
-
-      <Text style={styles.small}>Start countdown</Text>
-      <Row style={styles.wrap}>
-        {COUNTDOWNS.map((x) => (
-          <Chip key={x.label} label={x.label} selected={c.countdown_seconds === x.seconds} onPress={() => set({ countdown_seconds: x.seconds })} />
-        ))}
-      </Row>
-
-      {c.mode === 'koth' && (
-        <>
-          <Text style={styles.small}>Hill size (radius)</Text>
+        <ListRow
+          title="Players on teams"
+          value={FILLS.find((f) => f.fill === fillChoice)?.label}
+          open={rows.isOpen('fill')}
+          onPress={() => rows.toggle('fill')}
+        >
           <Row style={styles.wrap}>
-            {HILL_SIZES.map((r) => (
-              <Chip key={r} label={`${r} m`} selected={koth.radius === r} onPress={() => setKoth({ radius: r })} />
+            {FILLS.map((f) => (
+              <Chip key={f.fill} label={f.label} selected={fillChoice === f.fill} onPress={() => setFill(f.fill)} />
             ))}
           </Row>
-          <Text style={styles.small}>Hill moves</Text>
+          <Text style={styles.help}>{FILLS.find((f) => f.fill === fillChoice)?.help}</Text>
+        </ListRow>
+
+        <ListRow
+          title="Length"
+          value={LENGTHS.find((l) => l.seconds === c.length_seconds)?.label ?? `${Math.round((c.length_seconds ?? 0) / 60)} min`}
+          open={rows.isOpen('length')}
+          onPress={() => rows.toggle('length')}
+        >
           <Row style={styles.wrap}>
-            {MOVES.map((m) => (
-              <Chip
-                key={m.label}
-                label={m.label}
-                selected={koth.relocate_minutes === m.minutes}
-                onPress={() => setKoth({ relocate_minutes: m.minutes })}
-              />
+            {LENGTHS.map((l) => (
+              <Chip key={l.label} label={l.label} selected={c.length_seconds === l.seconds} onPress={() => set({ length_seconds: l.seconds })} />
             ))}
           </Row>
-          <View style={styles.between}>
-            <View style={{ flexShrink: 1 }}>
-              <Text style={styles.label}>Scoring</Text>
-              <Text style={styles.help}>1 point per second for the team holding the hill. Highest score wins.</Text>
-            </View>
-            <Switch
-              value={koth.scoring}
-              onValueChange={(scoring) => setKoth({ scoring })}
-              trackColor={{ true: colours.actionFill, false: colours.border }}
-              thumbColor={koth.scoring ? colours.accent : colours.textSecondary}
+        </ListRow>
+
+        <ListRow
+          title="Start countdown"
+          value={COUNTDOWNS.find((x) => x.seconds === c.countdown_seconds)?.label ?? `${c.countdown_seconds}s`}
+          open={rows.isOpen('countdown')}
+          onPress={() => rows.toggle('countdown')}
+        >
+          <Row style={styles.wrap}>
+            {COUNTDOWNS.map((x) => (
+              <Chip key={x.label} label={x.label} selected={c.countdown_seconds === x.seconds} onPress={() => set({ countdown_seconds: x.seconds })} />
+            ))}
+          </Row>
+        </ListRow>
+
+        {c.mode === 'koth' && (
+          <>
+            <ListRow
+              title="Hill size"
+              detail="Radius"
+              value={`${koth.radius} m`}
+              open={rows.isOpen('hill')}
+              onPress={() => rows.toggle('hill')}
+            >
+              <Row style={styles.wrap}>
+                {HILL_SIZES.map((r) => (
+                  <Chip key={r} label={`${r} m`} selected={koth.radius === r} onPress={() => setKoth({ radius: r })} />
+                ))}
+              </Row>
+            </ListRow>
+            <ListRow
+              title="Hill moves"
+              value={MOVES.find((m) => m.minutes === koth.relocate_minutes)?.label}
+              open={rows.isOpen('moves')}
+              onPress={() => rows.toggle('moves')}
+            >
+              <Row style={styles.wrap}>
+                {MOVES.map((m) => (
+                  <Chip
+                    key={m.label}
+                    label={m.label}
+                    selected={koth.relocate_minutes === m.minutes}
+                    onPress={() => setKoth({ relocate_minutes: m.minutes })}
+                  />
+                ))}
+              </Row>
+            </ListRow>
+            <ListRow
+              title="Scoring"
+              detail="1 point per second for the team holding the hill. Highest score wins."
+              right={
+                <Switch
+                  value={koth.scoring}
+                  onValueChange={(scoring) => setKoth({ scoring })}
+                  trackColor={{ true: colours.actionFill, false: colours.border }}
+                  thumbColor={koth.scoring ? colours.accent : colours.textSecondary}
+                />
+              }
             />
-          </View>
-        </>
-      )}
+          </>
+        )}
 
-      <Text style={styles.small}>Medic rules</Text>
-      <Row style={styles.wrap}>
-        <Chip label="Off" selected={!medic} onPress={() => setMedic(null)} />
-        {medicMissing && <Chip label={medic.name} selected />}
-        {medicSets.sets?.map((x) => (
-          <Chip
-            key={x.id}
-            label={x.name}
-            selected={!!medic && medic.name === x.name}
-            onPress={() => setMedic(settingsFor(x, medic?.bleed_minutes ?? 10))}
-          />
-        ))}
-      </Row>
-      {medic ? (
-        <>
-          <Text style={styles.help}>
-            {isRandom(medic)
-              ? rulesSummary(medic)
-              : medic.hits.map((h) => `${h.name}: ${helperText(h.helpers).toLowerCase()}`).join(' · ')}
-          </Text>
-          <Text style={styles.small}>Bleed-out</Text>
+        <ListRow
+          title="Medic rules"
+          detail={
+            medic
+              ? isRandom(medic)
+                ? rulesSummary(medic)
+                : medic.hits.map((h) => `${h.name}: ${helperText(h.helpers).toLowerCase()}`).join(' · ')
+              : 'No I’m hit button or scanning this game'
+          }
+          value={medic?.name ?? 'Off'}
+          open={rows.isOpen('medic')}
+          onPress={() => rows.toggle('medic')}
+        >
           <Row style={styles.wrap}>
-            {BLEED_CHOICES.map((m) => (
+            <Chip label="Off" selected={!medic} onPress={() => setMedic(null)} />
+            {medicMissing && <Chip label={medic.name} selected />}
+            {medicSets.sets?.map((x) => (
               <Chip
-                key={m}
-                label={`${m} min`}
-                selected={medic.bleed_minutes === m}
-                onPress={() => setMedic({ ...medic, bleed_minutes: m })}
+                key={x.id}
+                label={x.name}
+                selected={!!medic && medic.name === x.name}
+                onPress={() => setMedic(settingsFor(x, medic?.bleed_minutes ?? 10))}
               />
             ))}
           </Row>
-          <Text style={styles.help}>
-            {medic.expiry === 'dead'
-              ? 'An untreated wound becomes dead when bleed-out runs out.'
-              : 'An untreated player waits for help when bleed-out runs out.'}{' '}
-            Change the sets in Hosting, Medic rules.
-          </Text>
-        </>
-      ) : (
-        <Text style={styles.help}>No I’m hit button or scanning this game.</Text>
-      )}
+          <Text style={styles.help}>Change the sets in Hosting, Medic rules.</Text>
+        </ListRow>
+
+        {medic && (
+          <ListRow
+            title="Bleed-out"
+            detail={
+              medic.expiry === 'dead'
+                ? 'An untreated wound becomes dead when it runs out'
+                : 'An untreated player waits for help when it runs out'
+            }
+            value={`${medic.bleed_minutes} min`}
+            open={rows.isOpen('bleed')}
+            onPress={() => rows.toggle('bleed')}
+          >
+            <Row style={styles.wrap}>
+              {BLEED_CHOICES.map((m) => (
+                <Chip
+                  key={m}
+                  label={`${m} min`}
+                  selected={medic.bleed_minutes === m}
+                  onPress={() => setMedic({ ...medic, bleed_minutes: m })}
+                />
+              ))}
+            </Row>
+          </ListRow>
+        )}
+      </List>
 
       <Button title={editing ? 'Save settings' : 'Set up game'} busy={busy} onPress={save} />
       <Button title="Save to your setups" variant="quiet" busy={busy} onPress={saveSetup} />
@@ -329,7 +386,7 @@ function GameSetup({ game, onDone }: { game: Game | null; onDone?: () => void })
       {editing && <Button title="Cancel" variant="quiet" onPress={() => onDone?.()} />}
       {!!note && <Body muted>{note}</Body>}
       <ErrorText>{error}</ErrorText>
-    </Card>
+    </View>
   );
 }
 

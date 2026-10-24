@@ -5,8 +5,21 @@
 // built-in set opens as a copy, since built-ins can't be changed.
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Body, Button, Chip, ErrorText, Field, Label, Loading, Row, Screen } from '../../components/ui';
+import { StyleSheet, Text, View } from 'react-native';
+import {
+  Body,
+  Button,
+  Chip,
+  ErrorText,
+  Field,
+  Label,
+  List,
+  ListAdd,
+  ListRow,
+  Loading,
+  Row,
+  Screen,
+} from '../../components/ui';
 import { api, friendlyError } from '../../lib/api';
 import {
   chancePercents,
@@ -20,7 +33,7 @@ import {
   type MedicRuleset,
   type Wound,
 } from '../../lib/medic';
-import { colours, fonts, radius } from '../../theme';
+import { colours, fonts } from '../../theme';
 
 export default function MedicEditor() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -113,72 +126,67 @@ function Editor({ source, copy, isNew }: { source: MedicRuleset; copy: boolean; 
           : 'The same wounds in the same order every life, then dead.'}
       </Text>
 
-      <View style={styles.list}>
+      <List>
         {list.map((w, i) => (
-          <View key={i} style={styles.item}>
-            <WoundRow
-              title={w.name || 'New wound'}
-              detail={w.fatal ? 'Fatal, dead at once' : helperText(w.helpers)}
-              right={random ? `${w.chance ?? 0}%` : `${ORDINAL[i + 1]} hit`}
-              big={random}
-              rightColour={w.fatal ? colours.danger : undefined}
-              open={open === i}
-              onPress={() => setOpen(open === i ? null : i)}
-            />
-            {open === i && (
-              <View style={styles.details}>
-                <WoundFields wound={w} onChange={(patch) => edit(i, patch)} />
-                {random && (
-                  <>
-                    <Text style={styles.small}>Chance</Text>
-                    <View style={styles.chance}>
-                      <Button
-                        title="−"
-                        variant="secondary"
-                        onPress={() => edit(i, { chance: (w.chance ?? 0) > 5 ? (w.chance ?? 0) - 5 : w.chance })}
-                      />
-                      <Text style={styles.percent}>{w.chance ?? 0}%</Text>
-                      <Button
-                        title="+"
-                        variant="secondary"
-                        onPress={() => edit(i, { chance: Math.min(100, (w.chance ?? 0) + 5) })}
-                      />
-                    </View>
-                    <Row>
-                      <Chip label="Fatal" selected={!!w.fatal} onPress={() => edit(i, { fatal: !w.fatal })} />
-                    </Row>
-                  </>
-                )}
+          <ListRow
+            key={i}
+            title={w.name || 'New wound'}
+            detail={w.fatal ? 'Fatal, dead at once' : helperText(w.helpers)}
+            value={random ? `${w.chance ?? 0}%` : `${ORDINAL[i + 1]} hit`}
+            big={random}
+            valueColour={w.fatal ? colours.danger : undefined}
+            open={open === i}
+            onPress={() => setOpen(open === i ? null : i)}
+          >
+            <WoundFields wound={w} onChange={(patch) => edit(i, patch)} />
+            {random && (
+              <>
+                <Text style={styles.small}>Chance</Text>
+                <View style={styles.chance}>
+                  <Button
+                    title="−"
+                    variant="secondary"
+                    onPress={() => edit(i, { chance: (w.chance ?? 0) > 5 ? (w.chance ?? 0) - 5 : w.chance })}
+                  />
+                  <Text style={styles.percent}>{w.chance ?? 0}%</Text>
+                  <Button
+                    title="+"
+                    variant="secondary"
+                    onPress={() => edit(i, { chance: Math.min(100, (w.chance ?? 0) + 5) })}
+                  />
+                </View>
                 <Row>
-                  {list.length < max && (
-                    <Button
-                      title="Duplicate"
-                      variant="quiet"
-                      onPress={() => {
-                        setList((ws) => [...ws.slice(0, i + 1), { ...w }, ...ws.slice(i + 1)]);
-                        setOpen(i + 1);
-                      }}
-                    />
-                  )}
-                  {list.length > 1 && (
-                    <Button
-                      title="Remove"
-                      variant="quiet"
-                      onPress={() => {
-                        setList((ws) => ws.filter((_, j) => j !== i));
-                        setOpen(null);
-                      }}
-                    />
-                  )}
+                  <Chip label="Fatal" selected={!!w.fatal} onPress={() => edit(i, { fatal: !w.fatal })} />
                 </Row>
-              </View>
+              </>
             )}
-          </View>
+            <Row>
+              {list.length < max && (
+                <Button
+                  title="Duplicate"
+                  variant="quiet"
+                  onPress={() => {
+                    setList((ws) => [...ws.slice(0, i + 1), { ...w }, ...ws.slice(i + 1)]);
+                    setOpen(i + 1);
+                  }}
+                />
+              )}
+              {list.length > 1 && (
+                <Button
+                  title="Remove"
+                  variant="quiet"
+                  onPress={() => {
+                    setList((ws) => ws.filter((_, j) => j !== i));
+                    setOpen(null);
+                  }}
+                />
+              )}
+            </Row>
+          </ListRow>
         ))}
         {list.length < max && (
-          <Pressable
-            accessibilityRole="button"
-            style={[styles.item, styles.add]}
+          <ListAdd
+            title={random ? 'Add wound' : 'Add hit'}
             onPress={() => {
               setList((ws) => [
                 ...ws,
@@ -186,11 +194,9 @@ function Editor({ source, copy, isNew }: { source: MedicRuleset; copy: boolean; 
               ]);
               setOpen(list.length);
             }}
-          >
-            <Text style={styles.addText}>{random ? '+ Add wound' : '+ Add hit'}</Text>
-          </Pressable>
+          />
         )}
-      </View>
+      </List>
       {random && (
         <View style={styles.total}>
           <Text style={[styles.totalText, total !== 100 && { color: colours.danger }]}>
@@ -200,33 +206,28 @@ function Editor({ source, copy, isNew }: { source: MedicRuleset; copy: boolean; 
         </View>
       )}
 
-      <View style={styles.list}>
-        <View style={styles.item}>
-          <WoundRow
-            title={dead.name || 'Dead'}
-            detail={`Brought back by ${helperText(dead.helpers).toLowerCase()}`}
-            right={`${ORDINAL[random ? deadOn : list.length + 1]} hit`}
-            open={open === 'dead'}
-            onPress={() => setOpen(open === 'dead' ? null : 'dead')}
-          />
-          {open === 'dead' && (
-            <View style={styles.details}>
-              <WoundFields wound={dead} onChange={(patch) => setDead((d) => ({ ...d, ...patch }))} dead />
-              {random && (
-                <>
-                  <Text style={styles.small}>Dead on hit</Text>
-                  <Row>
-                    {DEAD_ON_CHOICES.map((n) => (
-                      <Chip key={n} label={ORDINAL[n]} selected={deadOn === n} onPress={() => setDeadOn(n)} />
-                    ))}
-                  </Row>
-                  <Text style={styles.help}>A fatal wound is dead sooner, and follows these rules too.</Text>
-                </>
-              )}
-            </View>
+      <List>
+        <ListRow
+          title={dead.name || 'Dead'}
+          detail={`Brought back by ${helperText(dead.helpers).toLowerCase()}`}
+          value={`${ORDINAL[random ? deadOn : list.length + 1]} hit`}
+          open={open === 'dead'}
+          onPress={() => setOpen(open === 'dead' ? null : 'dead')}
+        >
+          <WoundFields wound={dead} onChange={(patch) => setDead((d) => ({ ...d, ...patch }))} dead />
+          {random && (
+            <>
+              <Text style={styles.small}>Dead on hit</Text>
+              <Row>
+                {DEAD_ON_CHOICES.map((n) => (
+                  <Chip key={n} label={ORDINAL[n]} selected={deadOn === n} onPress={() => setDeadOn(n)} />
+                ))}
+              </Row>
+              <Text style={styles.help}>A fatal wound is dead sooner, and follows these rules too.</Text>
+            </>
           )}
-        </View>
-      </View>
+        </ListRow>
+      </List>
       <Text style={styles.help}>Medic means players whose role today is Medic, on the same team.</Text>
 
       <Label>When bleed-out runs out</Label>
@@ -243,37 +244,6 @@ function Editor({ source, copy, isNew }: { source: MedicRuleset; copy: boolean; 
       <Button title="Save" busy={busy} onPress={save} />
       <ErrorText>{error}</ErrorText>
     </Screen>
-  );
-}
-
-/** One line of the list: the wound and who helps, with its chance or hit on the right. Tap to edit. */
-function WoundRow(props: {
-  title: string;
-  detail: string;
-  right: string;
-  big?: boolean;
-  rightColour?: string;
-  open: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ expanded: props.open }}
-      onPress={props.onPress}
-      style={styles.row}
-    >
-      <View style={{ flex: 1, gap: 2 }}>
-        <Text style={styles.rowTitle}>{props.title}</Text>
-        <Text style={styles.rowDetail}>{props.detail}</Text>
-      </View>
-      <Text
-        style={[props.big ? styles.rowBig : styles.rowRight, props.rightColour ? { color: props.rightColour } : null]}
-      >
-        {props.right}
-      </Text>
-      <Text style={styles.chevron}>{props.open ? '⌃' : '⌄'}</Text>
-    </Pressable>
   );
 }
 
@@ -360,30 +330,6 @@ const styles = StyleSheet.create({
   help: { color: colours.textSecondary, fontFamily: fonts.regular, fontSize: 13 },
   multi: { minHeight: 80, paddingTop: 12, textAlignVertical: 'top' },
   chance: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  list: {
-    backgroundColor: colours.surface,
-    borderColor: colours.border,
-    borderWidth: 1,
-    borderRadius: radius,
-    overflow: 'hidden',
-  },
-  item: { borderBottomColor: colours.border, borderBottomWidth: 1 },
-  row: {
-    minHeight: 64,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  rowTitle: { color: colours.text, fontFamily: fonts.semibold, fontSize: 16 },
-  rowDetail: { color: colours.textSecondary, fontFamily: fonts.regular, fontSize: 13 },
-  rowBig: { color: colours.text, fontFamily: fonts.display, fontSize: 28 },
-  rowRight: { color: colours.textSecondary, fontFamily: fonts.medium, fontSize: 14 },
-  chevron: { color: colours.textSecondary, fontSize: 16, width: 16, textAlign: 'center' },
-  details: { paddingHorizontal: 14, paddingBottom: 14, gap: 10 },
-  add: { minHeight: 52, justifyContent: 'center', paddingHorizontal: 14, borderBottomWidth: 0 },
-  addText: { color: colours.accent, fontFamily: fonts.semibold, fontSize: 15 },
   total: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   totalText: { color: colours.text, fontFamily: fonts.semibold, fontSize: 15, flexShrink: 1 },
   percent: { color: colours.text, fontFamily: fonts.semibold, fontSize: 17, minWidth: 56, textAlign: 'center' },

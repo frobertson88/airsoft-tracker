@@ -39,6 +39,17 @@ These came up while running the app on phones and override the canvas where they
 - **Squad** shows your own team's sections open and other sections and teams folded.
 - The app now uses the Barlow Condensed and IBM Plex Sans fonts below.
 
+## List rows (agreed 24 October 2026)
+
+The house style for lists and settings, first used in the medic rules editor. Use it for any new list or settings screen.
+
+- **A list is one bordered group** (`List` in `mobile/src/components/ui.tsx`), rows split by thin lines. Not a stack of separate cards, each with its own buttons.
+- **Each row** (`ListRow`): the name on the left in semibold, one short detail line under it in grey (who treats it, location, what the setting does), and the **value on the right**: the current choice ("20 min", "Random wounds"), or a big Barlow number when the number is the point (a chance, "40%"). Orange on the right only for danger (a fatal wound, no field yet). Optionally a small icon or picture on the left.
+- **Tap to open.** A row that has more to edit opens in place to show its chips, fields and actions (chevron down/up). Only one row is open at a time (`useOpenRow`). A row that goes to another screen shows a chevron right. A plain on/off setting puts its switch on the right and doesn't open.
+- **Actions live inside the opened row** (Edit, Duplicate, Remove), not on every row at once. Adding goes in a last accent row, "+ Add wound" (`ListAdd`).
+- Totals or warnings about the whole list (such as "Total 100%") go just under the list.
+- A section label (`Label`) sits above each list; keep summaries and big status cards (the game clock, player counts) as cards.
+
 ## Type and shape
 
 - Display: **Barlow Condensed** (bold, uppercase) for titles, team names and big buttons.
