@@ -146,11 +146,14 @@ export const FieldMap = forwardRef<FieldMapHandle, FieldMapProps>(function Field
       const m = map.current;
       const { width, height } = size.current;
       if (!m || !width || !height) return null;
-      m.animateToRegion(fieldRegion(), 0);
+      const region = fieldRegion();
+      m.animateToRegion(region, 0);
       // Give the satellite tiles a moment to load at the new view.
       await new Promise((r) => setTimeout(r, 1500));
       try {
         const b64 = await m.takeSnapshot({
+          // iOS needs the region spelled out: left blank it pictures the sea at 0°, 0°.
+          region,
           width: 480,
           height: Math.round((480 * height) / width),
           format: 'jpg',
