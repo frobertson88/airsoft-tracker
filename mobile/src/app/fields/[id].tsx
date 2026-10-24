@@ -39,7 +39,7 @@ const HINTS: Record<Tool, string> = {
   boundary: 'Tap the map to place the corners of the playable area, in order around the edge.',
   nogo: 'Tap the corners of the area players must not enter.',
   danger: 'Tap the corners of the hazard area.',
-  point: 'Tap the map where the point is.',
+  point: 'Tap the map to drop a point. Each tap adds one.',
 };
 
 export default function FieldEditor() {
@@ -59,7 +59,8 @@ export default function FieldEditor() {
   const [pendingArea, setPendingArea] = useState<{ kind: AreaKind; points: Coord[] } | null>(null);
   const [areaName, setAreaName] = useState('');
   const [areaNote, setAreaNote] = useState('');
-  const [pendingPoint, setPendingPoint] = useState<Coord | null>(null);
+  // How many points this run of the point tool added, so Undo only takes those back.
+  const [pointsAdded, setPointsAdded] = useState(0);
   const [pointLabel, setPointLabel] = useState('');
   const [pointKind, setPointKind] = useState<PointKind>('staging');
 
@@ -105,7 +106,8 @@ export default function FieldEditor() {
     setTool(t);
     setDraft([]);
     setPendingArea(null);
-    setPendingPoint(null);
+    setPointsAdded(0);
+    setPointLabel('');
     setError('');
   };
 
@@ -118,8 +120,7 @@ export default function FieldEditor() {
   const onMapPress = (c: Coord) => {
     if (!tool || pendingArea) return;
     if (tool === 'point') {
-      setPendingPoint(c);
-      setPointLabel('');
+      addPoint(c);
       return;
     }
     setDraft((d) => [...d, c]);
@@ -151,13 +152,19 @@ export default function FieldEditor() {
     setTool(null);
   };
 
-  const addPoint = () => {
-    if (!pendingPoint) return;
-    // The label is optional: a point left blank is named after its kind.
+  // Each tap drops a point of the chosen kind. The label is optional: left blank,
+  // the point is named after its kind. The label clears for the next one.
+  const addPoint = (c: Coord) => {
     const kindLabel = POINT_KINDS.find((k) => k.kind === pointKind)?.label ?? 'Point';
-    const point: FieldPoint = { ...pendingPoint, kind: pointKind, label: pointLabel.trim() || kindLabel };
+    const point: FieldPoint = { ...c, kind: pointKind, label: pointLabel.trim() || kindLabel };
     setData((d) => ({ ...d, points: [...d.points, point] }));
-    setPendingPoint(null);
+    setPointsAdded((n) => n + 1);
+    setPointLabel('');
+  };
+
+  const undoPoint = () => {
+    setData((d) => ({ ...d, points: d.points.slice(0, -1) }));
+    setPointsAdded((n) => n - 1);
   };
 
   const findPlace = async () => {
@@ -261,23 +268,22 @@ export default function FieldEditor() {
               <Button title="Discard" variant="secondary" onPress={() => { setPendingArea(null); setTool(null); }} />
             </Row>
           </Card>
-        ) : pendingPoint ? (
+        ) : tool === 'point' ? (
           <Card>
-            <Label>New point</Label>
+            <Label>Points · {pointsAdded} added</Label>
             <Row>
               {POINT_KINDS.map((k) => (
                 <Chip key={k.kind} label={k.label} selected={pointKind === k.kind} onPress={() => setPointKind(k.kind)} />
               ))}
             </Row>
-            <Field value={pointLabel} onChangeText={setPointLabel} placeholder="Label (optional), e.g. Car park" maxLength={40} />
+            <Field value={pointLabel} onChangeText={setPointLabel} placeholder="Label for the next point (optional)" maxLength={40} />
             <Row>
-              <Button title="Add point" onPress={addPoint} />
-              <Button title="Cancel" variant="secondary" onPress={() => setPendingPoint(null)} />
+              <Button title="Done" onPress={stopTool} />
+              <Button title="Undo" variant="secondary" disabled={pointsAdded === 0} onPress={undoPoint} />
             </Row>
           </Card>
         ) : (
           <>
-            {tool === 'point' && <Button title="Done adding points" variant="secondary" onPress={stopTool} />}
             {!tool && (
               <>
                 <Label>Add to the map</Label>
@@ -297,7 +303,7 @@ export default function FieldEditor() {
 
         <ErrorText>{error}</ErrorText>
 
-        {!tool && !pendingArea && !pendingPoint && (
+        {!tool && !pendingArea && (
           <>
             <Label>Find the field</Label>
             <Row style={{ flexWrap: 'nowrap' }}>
