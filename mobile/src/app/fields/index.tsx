@@ -84,6 +84,9 @@ export default function FieldLibrary() {
               )}
               <Row>
                 <Button title="Edit" variant="secondary" onPress={() => router.push(`/fields/${f.id}`)} />
+                {(f.data.points?.length ?? 0) > 0 && (
+                  <Button title="QR codes" variant="secondary" onPress={() => router.push(`/tags/${f.id}`)} />
+                )}
                 <Button title="Duplicate" variant="secondary" busy={busy === f.id} onPress={() => act(f.id, () => api.duplicateField(f.id))} />
                 <Button title="Archive" variant="secondary" busy={busy === f.id} onPress={() => act(f.id, () => api.archiveField(f.id, true))} />
               </Row>

@@ -9,6 +9,7 @@ import {
   AREA_LABELS,
   centroid,
   POINT_KINDS,
+  pointName,
   viewFor,
   type AreaKind,
   type Coord,
@@ -282,7 +283,7 @@ export const FieldMap = forwardRef<FieldMapHandle, FieldMapProps>(function Field
         return (
           <Marker
             // The key changes with the look so the marker redraws.
-            key={`point-${i}-${p.kind}-${p.label}-${selected}`}
+            key={`point-${i}-${p.kind}-${p.num}-${p.label}-${selected}`}
             coordinate={toLatLng(p)}
             anchor={{ x: 0.5, y: 0.5 }}
             tracksViewChanges={false}
@@ -306,7 +307,7 @@ export const FieldMap = forwardRef<FieldMapHandle, FieldMapProps>(function Field
                 <Ionicons name={kind.icon as never} size={14} color={colours.onAccent} />
               </View>
               <Text style={styles.pointLabel} numberOfLines={1}>
-                {p.label}
+                {pointName(p)}
               </Text>
             </View>
           </Marker>

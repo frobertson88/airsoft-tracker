@@ -1,5 +1,6 @@
-// Scan tab: point the camera at a hit player's QR code to see their wound and
-// treat them (plans/medic-proposal.md §3). QR codes stand in for NFC wristbands.
+// Scan tab: point the camera at a code. A hit player's QR shows their wound so
+// you can treat them (plans/medic-proposal.md §3; QR stands in for NFC
+// wristbands). A point's QR (tag library, phase 1) says which point it is.
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useIsFocused } from 'expo-router';
 import { useRef, useState } from 'react';
@@ -9,6 +10,7 @@ import { api, friendlyError } from '../../../lib/api';
 import { useDay } from '../../../lib/day';
 import { clockFor, formatClock, useServerNow, type Game } from '../../../lib/game';
 import { bleedLeft, decodeCode, helperText, medicOf, type MedicSettings, type ScanResult } from '../../../lib/medic';
+import { parseTag, type TagLookup } from '../../../lib/tags';
 import { colours, fonts, radius, space } from '../../../theme';
 
 interface Scanned {
@@ -24,23 +26,6 @@ export default function ScanTab() {
   const now = useServerNow(1000);
   const state = game ? clockFor(game, now).state : null;
 
-  if (!game || !medic) {
-    return (
-      <Screen>
-        <Display>Scan</Display>
-        <Body muted>{game ? 'Medic rules are off for this game.' : 'No game yet.'}</Body>
-        <Body muted>When a game uses medic rules, scan a hit player’s code here to treat them.</Body>
-      </Screen>
-    );
-  }
-  if (state !== 'live') {
-    return (
-      <Screen>
-        <Display>Scan</Display>
-        <Body muted>{state === 'complete' ? 'The game has finished.' : 'Scanning works while the game is live.'}</Body>
-      </Screen>
-    );
-  }
   if (Platform.OS === 'web') {
     return (
       <Screen>
@@ -49,14 +34,35 @@ export default function ScanTab() {
       </Screen>
     );
   }
-  return <Scanner game={game} medic={medic} now={now} />;
+  // Point codes scan any time; player codes only while a medic game is live.
+  const medicNote = !game
+    ? 'No game yet, so there’s no one to treat.'
+    : !medic
+      ? 'Medic rules are off for this game.'
+      : state === 'complete'
+        ? 'The game has finished.'
+        : state !== 'live'
+          ? 'Treating players works while the game is live.'
+          : '';
+  return <Scanner game={game} medic={medicNote ? null : medic} medicNote={medicNote} now={now} />;
 }
 
-function Scanner({ game, medic, now }: { game: Game; medic: MedicSettings; now: number }) {
-  const { callsign, reload } = useDay();
+function Scanner({
+  game,
+  medic,
+  medicNote,
+  now,
+}: {
+  game: Game | null;
+  medic: MedicSettings | null;
+  medicNote: string;
+  now: number;
+}) {
+  const { id: dayId, callsign, reload } = useDay();
   const focused = useIsFocused();
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState<Scanned | null>(null);
+  const [tag, setTag] = useState<TagLookup | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [done, setDone] = useState('');
@@ -68,9 +74,16 @@ function Scanner({ game, medic, now }: { game: Game; medic: MedicSettings; now: 
     handling.current = true;
     setError('');
     setDone('');
+    const code = parseTag(text);
     const parsed = decodeCode(text);
     try {
-      if (!parsed) throw new Error('That isn’t a player code.');
+      if (code) {
+        setBusy(true);
+        setTag(await api.lookupTag(code, dayId));
+        return;
+      }
+      if (!parsed) throw new Error('That isn’t a player or point code.');
+      if (!game || !medic) throw new Error(medicNote);
       if (parsed.game !== game.id) throw new Error('That code is from another game.');
       setBusy(true);
       const result = await api.scanPlayer(game.id, parsed.user, parsed.code);
@@ -88,12 +101,13 @@ function Scanner({ game, medic, now }: { game: Game; medic: MedicSettings; now: 
 
   const reset = () => {
     setScanned(null);
+    setTag(null);
     setError('');
     handling.current = false;
   };
 
   const treat = async () => {
-    if (!scanned) return;
+    if (!scanned || !game) return;
     setBusy(true);
     setError('');
     try {
@@ -121,14 +135,45 @@ function Scanner({ game, medic, now }: { game: Game; medic: MedicSettings; now: 
     return (
       <Screen>
         <Display>Scan</Display>
-        <Body>The camera scans a hit player’s code so you can treat them.</Body>
+        <Body>The camera scans a hit player’s code so you can treat them, and the QR codes on field points.</Body>
         <Button title="Allow camera" onPress={requestPermission} />
         {!permission.canAskAgain && <Body muted>Turn the camera on for this app in your phone’s settings.</Body>}
       </Screen>
     );
   }
 
-  if (scanned) {
+  if (tag) {
+    const p = tag.point;
+    return (
+      <Screen>
+        <Text style={styles.kicker}>{tag.code}</Text>
+        {tag.known && p ? (
+          <>
+            <Display size={36}>{p.num ? `Point ${p.num}` : 'Point'}</Display>
+            <Body>{p.label}</Body>
+            <Body muted>{tag.field}</Body>
+          </>
+        ) : tag.known ? (
+          <>
+            <Display size={36}>Removed point</Display>
+            <Body muted>This code was on a point that’s no longer on {tag.field}.</Body>
+          </>
+        ) : (
+          <>
+            <Display size={36}>Not set up</Display>
+            <Body muted>
+              {tag.mine
+                ? 'This code isn’t on a point any more. Put it on one in Fields → QR codes.'
+                : 'This code isn’t a point on this Game Day’s field.'}
+            </Body>
+          </>
+        )}
+        <Button title="Scan another" variant="secondary" onPress={reset} />
+      </Screen>
+    );
+  }
+
+  if (scanned && game) {
     const r = scanned.result;
     const name = callsign(scanned.user);
     const left = r.expired ? 0 : bleedLeft(game, r.bleed_until, now);
@@ -179,9 +224,9 @@ function Scanner({ game, medic, now }: { game: Game; medic: MedicSettings; now: 
       )}
       <View style={styles.frame} pointerEvents="none" />
       <View style={styles.panel}>
-        <Text style={styles.panelTitle}>{busy ? 'Checking…' : 'Point the camera at a hit player’s code'}</Text>
+        <Text style={styles.panelTitle}>{busy ? 'Checking…' : 'Point the camera at a player’s or point’s code'}</Text>
         <Text style={styles.panelText}>
-          {medic.name} · bleed-out {medic.bleed_minutes} min
+          {medic ? `${medic.name} · bleed-out ${medic.bleed_minutes} min` : medicNote}
         </Text>
         {!!done && <Text style={[styles.panelText, { color: colours.accent }]}>{done}</Text>}
         {!!error && <Text style={[styles.panelText, { color: colours.danger }]}>{error}</Text>}

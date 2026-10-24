@@ -6,6 +6,7 @@ import type { GameMode, KothSettings } from './game';
 import type { TeamColour } from '../theme';
 import type { Affiliation, MapObjectKind, Target } from './mapTools';
 import type { MedicRules, MyMedic, ScanResult } from './medic';
+import type { PointTag, TagLookup } from './tags';
 import type { DayRole, OpenDay } from './types';
 
 /** How arrange_teams fills teams: keep players, deal them out at random, or everyone picks again. */
@@ -89,6 +90,9 @@ const MESSAGES: Record<string, string> = {
   medic_name_invalid: 'Give the rules a name (40 characters at most).',
   too_many_rulesets: 'You have 50 medic rule sets. Delete one first.',
   ruleset_not_found: 'Those medic rules no longer exist.',
+  tag_invalid: 'That isn’t one of our QR codes.',
+  tag_taken: 'That QR code belongs to someone else’s field.',
+  point_not_found: 'That point is no longer on the field. Save the field and try again.',
 };
 
 export class ApiError extends Error {
@@ -185,6 +189,12 @@ export const api = {
   archiveField: (field: string, archived: boolean) =>
     rpc('archive_field', { p_field: field, p_archived: archived }),
   selectDayField: (day: string, field: string) => rpc('select_day_field', { p_day: day, p_field: field }),
+
+  // Tag library (0012)
+  pointTags: (field: string) => rpc<PointTag[]>('point_tags', { p_field: field }),
+  bindTag: (code: string, field: string, point: string) =>
+    rpc('bind_tag', { p_code: code, p_field: field, p_point: point }),
+  lookupTag: (code: string, day: string | null) => rpc<TagLookup>('lookup_tag', { p_code: code, p_day: day }),
   // Games
   createGame: (day: string, c: GameConfig) =>
     rpc<string>('create_game', {

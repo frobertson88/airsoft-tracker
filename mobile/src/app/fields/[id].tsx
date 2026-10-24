@@ -13,6 +13,7 @@ import {
   AREA_LABELS,
   DEFAULT_VIEW,
   POINT_KINDS,
+  pointName,
   polygonProblem,
   type AreaKind,
   type Coord,
@@ -429,14 +430,17 @@ export default function FieldEditor() {
               {data.points.map((p, i) => (
                 <ItemRow
                   key={`p${i}`}
-                  title={p.label}
+                  title={pointName(p)}
                   detail={POINT_KINDS.find((k) => k.kind === p.kind)?.label}
                   onRemove={() => setData((d) => ({ ...d, points: d.points.filter((_, j) => j !== i) }))}
                 />
               ))}
             </Card>
 
-            <Body muted>The map opens where you leave it when you save.</Body>
+            {!isNew && data.points.some((p) => p.id) && (
+              <Button title="QR codes for points" variant="secondary" onPress={() => router.push(`/tags/${id}`)} />
+            )}
+            <Body muted>The map opens where you leave it when you save. New points get a number and QR code once saved.</Body>
             <Button title="Save field" onPress={save} busy={busy} />
             {!!saving && <Body muted>{saving}</Body>}
             <Button title="Cancel" variant="secondary" onPress={() => router.back()} />
