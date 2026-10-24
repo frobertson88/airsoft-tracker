@@ -15,7 +15,7 @@ import {
   type GameMode,
   type KothSettings,
 } from '../lib/game';
-import { BLEED_CHOICES, helperText, settingsFor, useMedicRulesets, type MedicSettings } from '../lib/medic';
+import { BLEED_CHOICES, helperText, isRandom, rulesSummary, settingsFor, useMedicRulesets, type MedicSettings } from '../lib/medic';
 import { supabase } from '../lib/supabase';
 import { colours, fonts, space } from '../theme';
 import { GameClock } from './GameClock';
@@ -295,7 +295,9 @@ function GameSetup({ game, onDone }: { game: Game | null; onDone?: () => void })
       {medic ? (
         <>
           <Text style={styles.help}>
-            {medic.hits.map((h) => `${h.name}: ${helperText(h.helpers).toLowerCase()}`).join(' · ')}
+            {isRandom(medic)
+              ? rulesSummary(medic)
+              : medic.hits.map((h) => `${h.name}: ${helperText(h.helpers).toLowerCase()}`).join(' · ')}
           </Text>
           <Text style={styles.small}>Bleed-out</Text>
           <Row style={styles.wrap}>

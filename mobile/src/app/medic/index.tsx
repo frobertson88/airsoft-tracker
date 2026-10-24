@@ -46,7 +46,7 @@ export default function MedicLibrary() {
         </View>
         <Text style={styles.meta}>{rulesSummary(s.rules)}</Text>
         <Text style={styles.meta}>
-          {EXPIRY_LABEL[s.rules.expiry]} · Leg: {helperText(s.rules.hits[0]?.helpers)}
+          {EXPIRY_LABEL[s.rules.expiry]} · {firstWound(s).name}: {helperText(firstWound(s).helpers)}
         </Text>
       </Pressable>
       <Row>
@@ -89,6 +89,9 @@ export default function MedicLibrary() {
     </Screen>
   );
 }
+
+/** The wound shown on the card: the first random wound, else the 1st hit. */
+const firstWound = (s: MedicRuleset) => s.rules.wounds?.[0] ?? s.rules.hits[0];
 
 const styles = StyleSheet.create({
   name: { color: colours.text, fontSize: 22, ...display, flexShrink: 1 },
